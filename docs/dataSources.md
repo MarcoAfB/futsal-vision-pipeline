@@ -134,8 +134,10 @@ must remain explicit.
 ## Optional synthetic court source
 
 `syntheticCourt` registers the existing generator's expected
-`images/train` and `labels/train` layout. Its twenty point labels contain
-`classId x y` values in normalized coordinates. Original numeric IDs and
+`images/train` and `labels/train` layout. Its twenty landmark classes use YOLO
+boxes with `classId centerX centerY width height` in normalized coordinates.
+The small boxes identify landmarks; their coordinates remain in the source format.
+Original numeric IDs and
 source names containing `team_a` or `team_b` are retained while canonical
 landmark names use `SideA` or `SideB`.
 

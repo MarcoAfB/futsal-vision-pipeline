@@ -349,7 +349,7 @@ publicSources:
 syntheticSources:
 - sourceId: syntheticCourt
   sourceName: SinteticoQuadra
-  format: yoloPoints
+  format: yolo
   required: false
   imageRoot: data/raw/sinteticoQuadra/images/train
   labelRoot: data/raw/sinteticoQuadra/labels/train
