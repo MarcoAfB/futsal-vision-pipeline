@@ -29,3 +29,12 @@ but the inventory requires an explicit mapping before treating them as video fra
 The audit reports nonfinite coordinates, nonpositive sizes, and geometry extending
 beyond the image. It preserves the original values, including partially visible
 objects. A finding requests review; it is not an instruction to clip or delete a label.
+
+## YOLO image datasets
+
+Each nonempty row has `classId centerX centerY width height`, with normalized box
+coordinates. The same representation is used for synthetic landmark classes.
+Class IDs use an explicit source mapping. Generic player roles retain their source
+semantics without an invented team, and referees remain outside target counts.
+Parsed observations remain counted when geometry needs review; malformed rows and
+unknown IDs are reported with their annotation path and line number.
