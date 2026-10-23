@@ -124,12 +124,16 @@ def validateSourceMap(source: dict, labels: dict, inputType: str) -> None:
 def validateSources(data: dict, labels: dict) -> None:
     videos = data["ownVideos"]
     external = data["publicSources"] + data["syntheticSources"]
-    requireUnique([video["videoId"] for video in videos] + [source["sourceId"] for source in external],
-                  "source IDs")
+    requireUnique(
+        [video["videoId"] for video in videos] + [source["sourceId"] for source in external],
+        "source IDs",
+    )
     intervals = [interval for video in videos for interval in video["reviewedIntervals"]]
     requireUnique([interval["intervalId"] for interval in intervals], "interval IDs")
-    matchesByVideo = {video["videoId"]: {item["matchId"] for item in video["reviewedIntervals"]}
-                      for video in videos}
+    matchesByVideo = {
+        video["videoId"]: {item["matchId"] for item in video["reviewedIntervals"]}
+        for video in videos
+    }
     for video in videos:
         validateReviewedIntervals(video)
         validateSourceMap(video, labels, "labelName")
@@ -137,7 +141,9 @@ def validateSources(data: dict, labels: dict) -> None:
             relativePathValue(video[field])
         for interval in video["reviewedIntervals"]:
             reference = interval["provenance"].get("sameMatchAsVideoId")
-            if reference is not None and interval["matchId"] not in matchesByVideo.get(reference, set()):
+            if reference is not None and interval["matchId"] not in matchesByVideo.get(
+                reference, set()
+            ):
                 raise ValueError("sameMatchAsVideoId must identify the same original match.")
     for source in external:
         validateSourceMap(source, labels, "classId")
@@ -162,4 +168,6 @@ def loadCatalog(configPath: Path) -> Catalog:
         labelHash["path"] = relativePathValue(data["labelMapPath"])
         return Catalog(data, labels, [sourceHash, labelHash])
     except (KeyError, TypeError) as error:
-        raise ValueError(f"{configPath.name}: missing or invalid configuration field {error}.") from error
+        raise ValueError(
+            f"{configPath.name}: missing or invalid configuration field {error}."
+        ) from error
