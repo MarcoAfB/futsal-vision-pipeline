@@ -1,0 +1,293 @@
+schemaVersion: 1
+canonicalClasses:
+- classId: 0
+  name: ball
+  geometry: boundingBox
+- classId: 1
+  name: outfieldPlayerTeamA
+  geometry: boundingBox
+- classId: 2
+  name: outfieldPlayerTeamB
+  geometry: boundingBox
+- classId: 3
+  name: goalkeeperTeamA
+  geometry: boundingBox
+- classId: 4
+  name: goalkeeperTeamB
+  geometry: boundingBox
+- classId: 5
+  name: upperCornerSideA
+  geometry: point
+- classId: 6
+  name: lowerCornerSideA
+  geometry: point
+- classId: 7
+  name: upperGoalpostSideA
+  geometry: point
+- classId: 8
+  name: lowerGoalpostSideA
+  geometry: point
+- classId: 9
+  name: penaltyMarkSideA
+  geometry: point
+- classId: 10
+  name: secondPenaltyMarkSideA
+  geometry: point
+- classId: 11
+  name: upperCenterCourtPoint
+  geometry: point
+- classId: 12
+  name: lowerCenterCourtPoint
+  geometry: point
+- classId: 13
+  name: upperHalfwayLinePoint
+  geometry: point
+- classId: 14
+  name: lowerHalfwayLinePoint
+  geometry: point
+- classId: 15
+  name: substitutionPoint1
+  geometry: point
+- classId: 16
+  name: substitutionPoint2
+  geometry: point
+- classId: 17
+  name: substitutionPoint3
+  geometry: point
+- classId: 18
+  name: substitutionPoint4
+  geometry: point
+- classId: 19
+  name: upperCornerSideB
+  geometry: point
+- classId: 20
+  name: lowerCornerSideB
+  geometry: point
+- classId: 21
+  name: upperGoalpostSideB
+  geometry: point
+- classId: 22
+  name: lowerGoalpostSideB
+  geometry: point
+- classId: 23
+  name: penaltyMarkSideB
+  geometry: point
+- classId: 24
+  name: secondPenaltyMarkSideB
+  geometry: point
+labelMaps:
+  ownCvat:
+    inputType: labelName
+    normalization: stripCasefold
+    entries:
+    - sourceLabel: Bola
+      targetClass: ball
+      action: map
+    - sourceLabel: Jogador time a
+      targetClass: outfieldPlayerTeamA
+      action: map
+    - sourceLabel: Jogador time b
+      targetClass: outfieldPlayerTeamB
+      action: map
+    - sourceLabel: Goleiro time a
+      targetClass: goalkeeperTeamA
+      action: map
+    - sourceLabel: Goleiro time b
+      targetClass: goalkeeperTeamB
+      action: map
+    - sourceLabel: Escanteio superior time a
+      targetClass: upperCornerSideA
+      action: map
+    - sourceLabel: Escanteio inferior time a
+      targetClass: lowerCornerSideA
+      action: map
+    - sourceLabel: Trave superior time a
+      targetClass: upperGoalpostSideA
+      action: map
+    - sourceLabel: Trave inferior time a
+      targetClass: lowerGoalpostSideA
+      action: map
+    - sourceLabel: Pênalti time a
+      targetClass: penaltyMarkSideA
+      action: map
+    - sourceLabel: Tiro-livre time a
+      targetClass: secondPenaltyMarkSideA
+      action: map
+    - sourceLabel: Ponto superior centro da quadra
+      targetClass: upperCenterCourtPoint
+      action: map
+    - sourceLabel: Ponto inferior centro da quadra
+      targetClass: lowerCenterCourtPoint
+      action: map
+    - sourceLabel: Meio superior
+      targetClass: upperHalfwayLinePoint
+      action: map
+    - sourceLabel: Meio inferior
+      targetClass: lowerHalfwayLinePoint
+      action: map
+    - sourceLabel: Substituição 1
+      targetClass: substitutionPoint1
+      action: map
+    - sourceLabel: Substituição 2
+      targetClass: substitutionPoint2
+      action: map
+    - sourceLabel: Substituição 3
+      targetClass: substitutionPoint3
+      action: map
+    - sourceLabel: Substituição 4
+      targetClass: substitutionPoint4
+      action: map
+    - sourceLabel: Escanteio superior time b
+      targetClass: upperCornerSideB
+      action: map
+    - sourceLabel: Escanteio inferior time b
+      targetClass: lowerCornerSideB
+      action: map
+    - sourceLabel: Trave superior time b
+      targetClass: upperGoalpostSideB
+      action: map
+    - sourceLabel: Trave inferior time b
+      targetClass: lowerGoalpostSideB
+      action: map
+    - sourceLabel: Pênalti time b
+      targetClass: penaltyMarkSideB
+      action: map
+    - sourceLabel: Tiro-livre time b
+      targetClass: secondPenaltyMarkSideB
+      action: map
+    - sourceLabel: Juiz
+      targetClass: null
+      semanticClass: referee
+      action: ignore
+      reason: Referees are outside the target ontology; retain source provenance.
+    - sourceLabel: Jogador
+      targetClass: null
+      semanticClass: player
+      action: preserve
+      reason: A generic player label does not identify a team or role.
+    - sourceLabel: Centro da Quadra
+      targetClass: null
+      semanticClass: centerCourtPoint
+      action: preserve
+      reason: This source landmark is outside the twenty target landmarks.
+  publicBallPlayer:
+    inputType: classId
+    entries:
+    - sourceClassId: 0
+      sourceLabel: ball
+      targetClass: ball
+      action: map
+    - sourceClassId: 1
+      sourceLabel: player
+      targetClass: null
+      semanticClass: player
+      action: preserve
+      reason: Source annotations do not identify a team.
+  publicBallRoles:
+    inputType: classId
+    entries:
+    - sourceClassId: 0
+      sourceLabel: ball
+      targetClass: ball
+      action: map
+    - sourceClassId: 1
+      sourceLabel: goalkeeper
+      targetClass: null
+      semanticClass: goalkeeper
+      action: preserve
+      reason: Source annotations do not identify a team.
+    - sourceClassId: 2
+      sourceLabel: outfield_player
+      targetClass: null
+      semanticClass: outfieldPlayer
+      action: preserve
+      reason: Source annotations do not identify a team.
+    - sourceClassId: 3
+      sourceLabel: referee
+      targetClass: null
+      semanticClass: referee
+      action: ignore
+      reason: Referees are outside the target ontology; retain source provenance.
+  syntheticCourtPoints:
+    inputType: classId
+    entries:
+    - sourceClassId: 0
+      sourceLabel: upper_corner_team_a
+      targetClass: upperCornerSideA
+      action: map
+    - sourceClassId: 1
+      sourceLabel: lower_corner_team_a
+      targetClass: lowerCornerSideA
+      action: map
+    - sourceClassId: 2
+      sourceLabel: upper_goalpost_team_a
+      targetClass: upperGoalpostSideA
+      action: map
+    - sourceClassId: 3
+      sourceLabel: lower_goalpost_team_a
+      targetClass: lowerGoalpostSideA
+      action: map
+    - sourceClassId: 4
+      sourceLabel: penalty_mark_team_a
+      targetClass: penaltyMarkSideA
+      action: map
+    - sourceClassId: 5
+      sourceLabel: second_penalty_mark_team_a
+      targetClass: secondPenaltyMarkSideA
+      action: map
+    - sourceClassId: 6
+      sourceLabel: upper_center_court_point
+      targetClass: upperCenterCourtPoint
+      action: map
+    - sourceClassId: 7
+      sourceLabel: lower_center_court_point
+      targetClass: lowerCenterCourtPoint
+      action: map
+    - sourceClassId: 8
+      sourceLabel: upper_halfway_line_point
+      targetClass: upperHalfwayLinePoint
+      action: map
+    - sourceClassId: 9
+      sourceLabel: lower_halfway_line_point
+      targetClass: lowerHalfwayLinePoint
+      action: map
+    - sourceClassId: 10
+      sourceLabel: substitution_point_1
+      targetClass: substitutionPoint1
+      action: map
+    - sourceClassId: 11
+      sourceLabel: substitution_point_2
+      targetClass: substitutionPoint2
+      action: map
+    - sourceClassId: 12
+      sourceLabel: substitution_point_3
+      targetClass: substitutionPoint3
+      action: map
+    - sourceClassId: 13
+      sourceLabel: substitution_point_4
+      targetClass: substitutionPoint4
+      action: map
+    - sourceClassId: 14
+      sourceLabel: upper_corner_team_b
+      targetClass: upperCornerSideB
+      action: map
+    - sourceClassId: 15
+      sourceLabel: lower_corner_team_b
+      targetClass: lowerCornerSideB
+      action: map
+    - sourceClassId: 16
+      sourceLabel: upper_goalpost_team_b
+      targetClass: upperGoalpostSideB
+      action: map
+    - sourceClassId: 17
+      sourceLabel: lower_goalpost_team_b
+      targetClass: lowerGoalpostSideB
+      action: map
+    - sourceClassId: 18
+      sourceLabel: penalty_mark_team_b
+      targetClass: penaltyMarkSideB
+      action: map
+    - sourceClassId: 19
+      sourceLabel: second_penalty_mark_team_b
+      targetClass: secondPenaltyMarkSideB
+      action: map
