@@ -79,6 +79,12 @@ these checks do not establish perceptual uniqueness or tracking identity.
 The verification suite uses synthetic fixtures and passes without the real datasets.
 It covers parsing, reviewed-range boundaries, source mappings, match grouping,
 geometry findings, deterministic reports, source preservation, and CLI output guards.
+
+The completed delivery was verified on Windows with Python 3.13.5: 94 tests passed,
+Ruff passed, and `uv sync --locked` confirmed the dependency environment. The local
+run used a fresh pytest directory under `.pytest_cache` because the default system
+temporary directory was not writable.
+
 Training, model selection, temporal analyses, and sports statistics remain subsequent
 stages. Annotation ambiguities and exact cut boundaries require review before the
 corresponding future dataset materialization or temporal analysis.

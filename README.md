@@ -15,6 +15,9 @@ uv run ruff check .
 uv run pytest
 ```
 
+If pytest's system temporary directory is not writable, use a fresh project-local
+directory: `uv run pytest --basetemp .pytest_cache/localTestRun`.
+
 The environment is isolated from the previous implementation. The dependency lockfile
 is part of the project. GPU dependencies are not installed in this stage; the UTFPR
 server environment will be checked before training.
