@@ -25,3 +25,7 @@ annotation references and do not establish persistent athlete identity.
 
 Image export IDs remain export indices. The associated filenames are recorded,
 but the inventory requires an explicit mapping before treating them as video frames.
+
+The audit reports nonfinite coordinates, nonpositive sizes, and geometry extending
+beyond the image. It preserves the original values, including partially visible
+objects. A finding requests review; it is not an instruction to clip or delete a label.
