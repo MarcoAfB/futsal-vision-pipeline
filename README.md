@@ -19,6 +19,35 @@ The environment is isolated from the previous implementation. The dependency loc
 is part of the project. GPU dependencies are not installed in this stage; the UTFPR
 server environment will be checked before training.
 
+## Dataset inventory
+
+From the project root, point `dataRoot` at the directory containing the original
+registered sources. For the current sibling reference directory:
+
+```text
+uv run python -m futsal inventory --dataRoot ../Python --outputDir outputs/initialInventory
+```
+
+Use `--config <path>` for a different catalog; the default is
+`configs/dataSources.yaml`, relative to the working directory. Sources are read in
+place. The output directory must be outside `dataRoot` and cannot overwrite the
+catalog or label map. Generated outputs stay outside Git.
+
+The command writes `inventory.json` and `report.md`, including source provenance,
+reviewed-frame records, per-match class coverage, media metadata, and findings.
+
+| Exit code | Meaning |
+|---|---|
+| 0 | Audit completed with no error findings; warnings may exist. |
+| 1 | Audit completed and reports were written; source findings require review. |
+| 2 | The command could not complete because of an input or output failure. |
+
+After exit code 2, existing outputs must not be treated as results of that run.
+Outputs are replaced atomically per file, rather than as a single transaction.
+
+Read [source registration](docs/dataSources.md), [annotation formats](docs/annotationFormats.md),
+and the [initial audit](docs/initialAudit.md) for dataset-specific decisions and limitations.
+
 ## Conventions
 
 Code, configuration, documentation, and commit messages use English. Owned names use

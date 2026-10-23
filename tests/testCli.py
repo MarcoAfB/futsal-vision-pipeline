@@ -1,5 +1,3 @@
-"""Check the installed command-line entry point."""
-
 import pytest
 
 from futsal.cli import main
