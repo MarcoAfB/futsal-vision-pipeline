@@ -13,6 +13,11 @@ class Recipe:
     evidence: list[dict]
 
 
+def activeTasks(data):
+    tasks = {task["taskId"]: task for task in data["tasks"]}
+    return [tasks[taskId] for taskId in data["curriculum"]]
+
+
 def validateTask(task, canonicalNames, semanticNames, publicIds):
     if not isinstance(task, dict) or not re.fullmatch(r"[a-z][A-Za-z0-9]*", task["taskId"]):
         raise ValueError("taskId must be a camelCase filename-safe identifier.")
@@ -58,8 +63,9 @@ def validateRecipe(data, catalog):
     taskIds = [task["taskId"] for task in tasks]
     requireUnique(taskIds, "task IDs")
     sequence = data["curriculum"]
-    if not isinstance(sequence, list) or sequence != taskIds:
-        raise ValueError("curriculum must list each task once in its declared order.")
+    if not isinstance(sequence, list) or not sequence or not set(sequence) <= set(taskIds):
+        raise ValueError("curriculum must be a nonempty sequence of declared task IDs.")
+    requireUnique(sequence, "curriculum task IDs")
     coverageTask = next((task for task in tasks if task["taskId"] == data["coverageTask"]), None)
     if coverageTask is None or coverageTask["classes"] != canonicalNames:
         raise ValueError("coverageTask must retain the complete ordered canonical ontology.")
@@ -76,7 +82,7 @@ def validateRecipe(data, catalog):
     for field in ("widthFraction", "heightFraction"):
         data["pointBoxes"][field]
     validation = data["publicValidation"]
-    usedPublic = {source for task in tasks for source in task["trainingSources"]} - {"own"}
+    usedPublic = {source for task in activeTasks(data) for source in task["trainingSources"]} - {"own"}
     if validation["basis"] != "researcherConfirmation" or not usedPublic <= set(
         validation["sources"]
     ):

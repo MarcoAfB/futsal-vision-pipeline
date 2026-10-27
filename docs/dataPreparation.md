@@ -15,6 +15,12 @@ can use a different task or sequence without changing the source ontology.
 Training and checkpoint transfer are subsequent work; changing class indices
 between stages does not establish semantic equivalence of classifier outputs.
 
+`curriculum` selects an ordered subset of the declared tasks. A one-element
+sequence prepares a standalone task with the same implementation. `coverageTask`
+remains the complete canonical view used to validate the shared frozen split,
+even when it is not exported. Inactive tasks receive no dataset directories,
+public training samples or exported labels.
+
 On 2026-10-26 the researcher confirmed manual validation of public annotations for
 their source ontology and manual analysis of overlap with own recordings. This
 declaration authorizes compatible public training use; no new automated overlap

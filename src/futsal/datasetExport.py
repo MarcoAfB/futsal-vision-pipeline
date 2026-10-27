@@ -11,6 +11,7 @@ from futsal.datasetFiles import hashJson, stagedDirectory, verifyEvidence, write
 from futsal.datasetPlan import loadDatasetPlan, renderPlanReport
 from futsal.detectionGeometry import convertTargets, renderYoloLabels
 from futsal.frameExtraction import readSelectedFrames
+from futsal.recipes import activeTasks
 from futsal.reviewImages import renderReviewImage
 from futsal.yoloInventory import scanFiles
 
@@ -25,7 +26,7 @@ def taskSplit(sample, task, assignments):
 
 
 def exportSelections(plan, sample):
-    return [(task, split) for task in plan["recipe"]["tasks"]
+    return [(task, split) for task in activeTasks(plan["recipe"])
             if (split := taskSplit(sample, task, plan["frozenSplit"]["assignments"])) is not None]
 
 
@@ -146,7 +147,7 @@ def validateExportSummary(plan, rows):
     if expected != observed or len(observed) != len(rows):
         raise ValueError("Exported sample membership differs from planned eligible development data.")
     summary = {}
-    for task in plan["recipe"]["tasks"]:
+    for task in activeTasks(plan["recipe"]):
         summary[task["taskId"]] = {}
         for split in ("training", "validation"):
             selected = [row for row in rows if row["taskId"] == task["taskId"] and row["split"] == split]
@@ -174,7 +175,7 @@ def prepareDataset(planPath, dataRoot, outputDir, progress=print):
     with stagedDirectory(outputDir, dataRoot, [planPath]) as staging:
         progress("Checking source hashes before export...")
         verifyEvidence(dataRoot, plan["sourceEvidence"])
-        initializeTaskDirectories(staging, plan["recipe"]["tasks"])
+        initializeTaskDirectories(staging, activeTasks(plan["recipe"]))
         rows, reviews = exportImages(staging, plan, dataRoot, progress)
         summary = validateExportSummary(plan, rows)
         writeJson(staging / "plan.json", plan)

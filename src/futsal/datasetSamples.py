@@ -1,5 +1,6 @@
 from collections import Counter
 
+from futsal.recipes import activeTasks
 from futsal.yoloAnnotations import readYoloAnnotations
 
 
@@ -76,7 +77,7 @@ def collectPublicSamples(inventory, recipe, dataRoot):
     samples = []
     for report in inventory["externalSources"]:
         sourceId = report["sourceId"]
-        tasks = [task for task in recipe.data["tasks"] if sourceId in task["trainingSources"]]
+        tasks = [task for task in activeTasks(recipe.data) if sourceId in task["trainingSources"]]
         if not tasks:
             continue
         source = registered[sourceId]
@@ -123,7 +124,7 @@ def collectPublicSamples(inventory, recipe, dataRoot):
 
 def collectSamples(inventory, recipe, dataRoot):
     usedSources = {
-        source for task in recipe.data["tasks"] for source in task["trainingSources"]
+        source for task in activeTasks(recipe.data) for source in task["trainingSources"]
     } | {video["videoId"] for video in inventory["ownVideos"]}
     annotationFindings = {
         "geometryOutOfBounds", "coordinatesOutOfBounds", "degenerateBox", "degenerateGeometry",

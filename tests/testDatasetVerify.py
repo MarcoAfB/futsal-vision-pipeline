@@ -75,3 +75,20 @@ def testUnexpectedFilesAndDamagedArtifactsFailVerification(preparedSources):
     with pytest.raises(SystemExit) as error:
         main(["verifyDataset", "--datasetDir", str(output)])
     assert error.value.code == 2
+
+
+def testSingleStageUsesTheSameCoverageBasisWithoutExportingInactiveTasks(preparedSources):
+    dataRoot, configPath, planDir = preparedSources
+    config = yaml.safe_load(configPath.read_text(encoding="utf-8"))
+    config["curriculum"] = ["genericObjects"]
+    configPath.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
+    plan = buildDatasetPlan(configPath, dataRoot)
+    assert plan["ownSplitSummaries"]["unified25"]["test"]["missingClasses"] == []
+    planPath = writeDatasetPlan(plan, planDir, dataRoot)
+    output = planDir.parent / "prepared"
+    prepareDataset(planPath, dataRoot, output, progress=lambda message: None)
+    result = verifyDataset(output, progress=lambda message: None)
+    assert set(result["summary"]) == {"genericObjects"}
+    assert result["exportedImageCount"] == 3
+    assert not (output / "unified25").exists()
+    assert not (output / "roleObjects").exists()

@@ -7,6 +7,7 @@ from futsal.datasetFiles import hashJson, readJson, verifyEvidence
 from futsal.datasetPlan import loadDatasetPlan
 from futsal.detectionGeometry import convertTargets, renderYoloLabels, validNormalizedBox
 from futsal.mediaMetadata import readImageMetadata
+from futsal.recipes import activeTasks
 from futsal.yoloInventory import scanFiles
 
 
@@ -116,7 +117,7 @@ def verifyDataset(datasetDir, progress=print):
         summary = validateExportSummary(plan, manifest["samples"])
         if summary != manifest["summary"] or summary != contract["summary"]:
             raise ValueError("Exported class coverage differs from the declared summary.")
-        tasks = {task["taskId"]: task for task in plan["recipe"]["tasks"]}
+        tasks = {task["taskId"]: task for task in activeTasks(plan["recipe"])}
         allowedPaths = {"plan.json", "manifest.json", "review.md", "report.md"}
         allowedPaths.update(verifyTaskConfigurations(root, tasks.values()))
         samples = {sample["recordId"]: sample for sample in plan["samples"]}
