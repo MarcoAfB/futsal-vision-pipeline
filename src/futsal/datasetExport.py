@@ -167,6 +167,8 @@ def validateExportSummary(plan, rows):
 
 
 def prepareDataset(planPath, dataRoot, outputDir, progress=print):
+    from futsal.datasetVerify import verifyDataset
+
     dataRoot = Path(dataRoot).resolve()
     plan = loadDatasetPlan(planPath)
     with stagedDirectory(outputDir, dataRoot, [planPath]) as staging:
@@ -194,4 +196,6 @@ def prepareDataset(planPath, dataRoot, outputDir, progress=print):
                     "summary": summary, "testExported": False}
         contract["contractId"] = hashJson(contract)
         writeJson(staging / "contract.json", contract)
+        progress("Verifying completed datasets before publication...")
+        verifyDataset(staging, progress=progress)
     return contract

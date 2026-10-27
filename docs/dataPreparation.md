@@ -126,3 +126,24 @@ hashes are verified before and after export. The contract binds all output files
 Preview indices reference original annotations, and drawing clips are visualization
 only. Reserved test samples remain exclusively in plan metadata and never receive
 previews. Generic and role stages use own validation data, with public training only.
+
+## Independent verification
+
+```text
+uv run python -m futsal verifyDataset --datasetDir data/prepared/curriculumV1
+```
+
+Preparation invokes this verifier before publishing the new directory. It can also
+run without the source directory after moving the complete bundle to another
+machine. It checks contract and artifact hashes, exact file membership, native
+annotation references, converted labels, image decoding and dimensions, per-class
+support, frozen splits, review membership and portable YAML paths. Extra test
+entries, images or review previews are rejected. Updating file hashes alone does
+not allow labels to disagree with the original annotation conversion.
+
+Planning, preparation and verification return 0 on success and 2 on failure.
+Expected quarantine does not produce a failed preparation. The existing inventory
+command retains its separate 0/1/2 exit-code contract. Keep the prepared bundle
+immutable and store future training outputs outside it. Test coverage here refers
+to eligible annotation metadata; test images remain unexported and undecoded as
+samples until a separate final-evaluation delivery.

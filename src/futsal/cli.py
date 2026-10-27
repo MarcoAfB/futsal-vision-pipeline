@@ -32,9 +32,23 @@ def main(argv: list[str] | None = None) -> int:
     prepareParser.add_argument("--dataRoot", type=Path, required=True)
     prepareParser.add_argument("--plan", type=Path, required=True)
     prepareParser.add_argument("--outputDir", type=Path, required=True)
+    verifyParser = commands.add_parser("verifyDataset", help="Verify a portable prepared dataset bundle.")
+    verifyParser.add_argument("--datasetDir", type=Path, required=True)
     arguments = parser.parse_args(argv)
     if arguments.command is None:
         parser.print_help()
+        return 0
+    if arguments.command == "verifyDataset":
+        from futsal.datasetVerify import verifyDataset
+
+        try:
+            result = verifyDataset(arguments.datasetDir,
+                                   progress=lambda message: print(message, flush=True))
+        except (OSError, ValueError) as error:
+            parser.exit(2, f"Dataset verification failed: {error}\n")
+        print(f"Verified {result['exportedImageCount']} development images; "
+              f"reserved test records: {result['reservedTestRecordCount']}.")
+        print(f"Contract: {result['contractId']}")
         return 0
     if arguments.command == "planDataset":
         from futsal.datasetFiles import validateNewOutput
