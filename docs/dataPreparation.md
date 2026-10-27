@@ -81,3 +81,25 @@ where a truncated box center differs from the original landmark.
 Public boxes keep their original normalized coordinates. Labels use twelve decimal
 places; a 1e-10 normalized-edge tolerance accommodates serialization rounding,
 not invalid source geometry. Quarantined samples cannot enter conversion.
+
+## Planning and source snapshots
+
+```text
+uv run python -m futsal planDataset --dataRoot ../Python --outputDir outputs/curriculumPlan
+```
+
+The default recipe is `configs/curriculum.yaml`; use `--config` for another recipe.
+Its `splitPath` references the frozen split relative to the recipe. Omitting
+`splitPath` selects a new candidate, written to the plan directory as `splits.yaml`;
+freezing a new research split remains an explicit configuration change.
+
+Planning writes `plan.json`, `splits.yaml` and `report.md` to a new directory.
+The plan binds normalized recipes, raw annotation observations, eligibility,
+split assignment, configuration hashes and SHA-256 hashes of source media,
+annotations and evidence. It contains test annotation metadata but exports no
+test images or YOLO labels. Reusing a changed source or plan is refused.
+Hashes support reproducibility; they are not an automated overlap audit.
+
+New directories are prepared beside their destination and renamed only after
+successful completion. Existing destinations and source-root outputs are refused;
+an interrupted operation does not publish a completed-looking directory.

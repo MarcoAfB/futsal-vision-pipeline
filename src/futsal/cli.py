@@ -24,9 +24,26 @@ def main(argv: list[str] | None = None) -> int:
         default=Path("configs/dataSources.yaml"),
         help="Source catalog, relative to the working directory.",
     )
+    planParser = commands.add_parser("planDataset", help="Plan curriculum datasets and frozen splits.")
+    planParser.add_argument("--dataRoot", type=Path, required=True)
+    planParser.add_argument("--outputDir", type=Path, required=True)
+    planParser.add_argument("--config", type=Path, default=Path("configs/curriculum.yaml"))
     arguments = parser.parse_args(argv)
     if arguments.command is None:
         parser.print_help()
+        return 0
+    if arguments.command == "planDataset":
+        from futsal.datasetFiles import validateNewOutput
+        from futsal.datasetPlan import buildDatasetPlan, writeDatasetPlan
+
+        try:
+            validateNewOutput(arguments.outputDir, arguments.dataRoot, [arguments.config])
+            print("Reading source inventory and preparing task eligibility...", flush=True)
+            plan = buildDatasetPlan(arguments.config, arguments.dataRoot)
+            path = writeDatasetPlan(plan, arguments.outputDir, arguments.dataRoot, [arguments.config])
+        except (OSError, ValueError) as error:
+            parser.exit(2, f"Dataset planning could not be completed: {error}\n")
+        print(f"Plan: {path}\nAll canonical classes have eligible training and test annotations.")
         return 0
     from futsal.catalog import loadCatalog, resolveSourcePath
     from futsal.inventory import buildInventory

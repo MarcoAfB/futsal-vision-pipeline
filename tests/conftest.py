@@ -1,6 +1,9 @@
 import copy
 from pathlib import Path
+from xml.etree import ElementTree
 
+import cv2
+import numpy as np
 import pytest
 import yaml
 
@@ -88,3 +91,75 @@ def smallDataset(tmp_path, monkeypatch):
 
     monkeypatch.setattr("futsal.ownInventory.readVideoMetadata", videoProbe)
     return dataRoot, configPath, tmp_path / "results"
+
+
+@pytest.fixture
+def preparedSources(tmp_path):
+    projectRoot = Path(__file__).resolve().parents[1]
+    configRoot, dataRoot = tmp_path / "config", tmp_path / "sources"
+    configRoot.mkdir()
+    dataRoot.mkdir()
+    labels = yaml.safe_load((projectRoot / "configs/labelMap.yaml").read_text(encoding="utf-8"))
+    catalog = yaml.safe_load((projectRoot / "configs/dataSources.yaml").read_text(encoding="utf-8"))
+    recipe = yaml.safe_load((projectRoot / "configs/curriculum.yaml").read_text(encoding="utf-8"))
+    recipe.pop("splitPath")
+    recipe["tasks"][0]["trainingSources"] = ["futsal4400"]
+    recipe["tasks"][1]["trainingSources"] = ["futsalMot"]
+    videos = []
+    for number, matchId in enumerate(("matchA", "matchB", "matchC")):
+        video = copy.deepcopy(catalog["ownVideos"][0])
+        video.update(videoId=f"video{number}", legacyMatchId=None,
+                     videoPath=f"video{number}.avi", annotationPath=f"video{number}.xml")
+        video["reviewedIntervals"] = [{"intervalId": f"interval{number}", "matchId": matchId,
+            "startFrame": 0, "endFrame": 1, "internalCutsStatus": "pending",
+            "provenance": {"matchIdentityBasis": "researcherDeclaration"}}]
+        writer = cv2.VideoWriter(str(dataRoot / video["videoPath"]),
+                                 cv2.VideoWriter_fourcc(*"MJPG"), 5, (96, 64))
+        assert writer.isOpened()
+        for frameIndex in range(2):
+            writer.write(np.full((64, 96, 3), 30 + number * 40 + frameIndex * 10, dtype=np.uint8))
+        writer.release()
+        root = ElementTree.Element("annotations")
+        meta = ElementTree.SubElement(ElementTree.SubElement(root, "meta"), "task")
+        dimensions = ElementTree.SubElement(meta, "original_size")
+        ElementTree.SubElement(dimensions, "width").text = "96"
+        ElementTree.SubElement(dimensions, "height").text = "64"
+        for item in labels["canonicalClasses"]:
+            if number == 1 and item["name"] == "lowerCornerSideB":
+                continue
+            source = next(entry["sourceLabel"] for entry in labels["labelMaps"]["ownCvat"]["entries"]
+                          if entry.get("targetClass") == item["name"])
+            track = ElementTree.SubElement(root, "track", id=str(item["classId"]), label=source)
+            for frameIndex in range(2):
+                if item["geometry"] == "point":
+                    ElementTree.SubElement(track, "points", frame=str(frameIndex), points="40,30")
+                elif item["name"] == "ball":
+                    ElementTree.SubElement(track, "ellipse", frame=str(frameIndex),
+                                           cx="10", cy="10", rx="2", ry="2")
+                else:
+                    ElementTree.SubElement(track, "box", frame=str(frameIndex),
+                                           xtl="20", ytl="10", xbr="30", ybr="40")
+        ElementTree.ElementTree(root).write(dataRoot / video["annotationPath"], encoding="utf-8")
+        videos.append(video)
+    sources = [copy.deepcopy(source) for source in catalog["publicSources"]
+               if source["sourceId"] in {"futsal4400", "futsalMot"}]
+    for source in sources:
+        source.update(imageRoot=source["sourceId"], labelRoot=source["sourceId"],
+                      metadataFiles=[], labelMapEvidence="publicEvidence.yaml")
+        directory = dataRoot / source["sourceId"]
+        directory.mkdir()
+        assert cv2.imwrite(str(directory / "image.jpg"), np.full((64, 96, 3), 120, dtype=np.uint8))
+        content = "0 0.5 0.5 0.1 0.1\n1 0.3 0.5 0.1 0.4\n"
+        if source["sourceId"] == "futsalMot":
+            content += "2 0.7 0.5 0.1 0.4\n"
+        (directory / "image.txt").write_text(content, encoding="utf-8")
+    catalog.update(ownVideos=videos, publicSources=sources, syntheticSources=[],
+                   legacyReviewPath="reviewed.yaml",
+                   expected={"reviewedFrames": 6, "matchCount": 3, "videoCount": 3,
+                             "reviewedIntervalCount": 3})
+    (dataRoot / "reviewed.yaml").write_text("partidas: {}\n", encoding="utf-8")
+    (dataRoot / "publicEvidence.yaml").write_text("fixture: true\n", encoding="utf-8")
+    for name, value in (("labelMap.yaml", labels), ("dataSources.yaml", catalog),
+                        ("curriculum.yaml", recipe)):
+        (configRoot / name).write_text(yaml.safe_dump(value, sort_keys=False), encoding="utf-8")
+    return dataRoot, configRoot / "curriculum.yaml", tmp_path / "plan"
