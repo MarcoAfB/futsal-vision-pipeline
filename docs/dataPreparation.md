@@ -27,3 +27,15 @@ annotations in training and test after quarantine. Validation requires the other
 24 classes; lowerCornerSideB is unsupported there. These constraints take priority
 over approximate 70/15/15 proportions of the 3,684 reviewed own frame records.
 Source records are not asserted to be unique decoded images.
+
+## Task-specific quarantine
+
+An invalid relevant annotation excludes the entire image from that task. Source
+observations are retained, including the excluded targets. Geometry errors,
+multiple balls, repeated semantic landmarks, and incompatible source shapes are
+recorded as reasons. A landmark exported as an object box is not silently turned
+into a point. Empty original public labels are quarantined. Known ignored classes
+do not affect eligibility: invalid referee geometry does not exclude an otherwise
+valid ball/player image. Generic athlete labels cannot acquire an invented role
+or team. Structural source failures block planning rather than reducing the
+authoritative reviewed frame denominator.
