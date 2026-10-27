@@ -1,0 +1,51 @@
+schemaVersion: 1
+catalogPath: dataSources.yaml
+curriculum:
+- genericObjects
+- roleObjects
+- unified25
+coverageTask: unified25
+unsupportedValidationClasses:
+- lowerCornerSideB
+rareClass: lowerCornerSideB
+pointBoxes:
+  widthFraction: 0.015625
+  heightFraction: 0.027777777777777776
+publicValidation:
+  basis: researcherConfirmation
+  confirmedOn: '2026-10-26'
+  checks:
+  - annotationCompletenessForSourceOntology
+  - overlapWithOwnRecordings
+  sources:
+  - futsal4400
+  - smartFutsal
+  - futsalMot
+  - futsalAnaliza
+  - futsalDetect
+tasks:
+- taskId: genericObjects
+  classes: [ball, player]
+  trainingSources: [futsal4400, smartFutsal]
+  classMap:
+    ball: ball
+    player: player
+    outfieldPlayerTeamA: player
+    outfieldPlayerTeamB: player
+    goalkeeperTeamA: player
+    goalkeeperTeamB: player
+- taskId: roleObjects
+  classes: [ball, outfieldPlayer, goalkeeper]
+  trainingSources: [futsalMot, futsalAnaliza, futsalDetect]
+  classMap:
+    ball: ball
+    outfieldPlayer: outfieldPlayer
+    goalkeeper: goalkeeper
+    outfieldPlayerTeamA: outfieldPlayer
+    outfieldPlayerTeamB: outfieldPlayer
+    goalkeeperTeamA: goalkeeper
+    goalkeeperTeamB: goalkeeper
+- taskId: unified25
+  classes: canonical
+  trainingSources: [own]
+  classMap: identity
