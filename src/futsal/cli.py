@@ -28,6 +28,10 @@ def main(argv: list[str] | None = None) -> int:
     planParser.add_argument("--dataRoot", type=Path, required=True)
     planParser.add_argument("--outputDir", type=Path, required=True)
     planParser.add_argument("--config", type=Path, default=Path("configs/curriculum.yaml"))
+    prepareParser = commands.add_parser("prepareDataset", help="Export development data from a verified plan.")
+    prepareParser.add_argument("--dataRoot", type=Path, required=True)
+    prepareParser.add_argument("--plan", type=Path, required=True)
+    prepareParser.add_argument("--outputDir", type=Path, required=True)
     arguments = parser.parse_args(argv)
     if arguments.command is None:
         parser.print_help()
@@ -44,6 +48,18 @@ def main(argv: list[str] | None = None) -> int:
         except (OSError, ValueError) as error:
             parser.exit(2, f"Dataset planning could not be completed: {error}\n")
         print(f"Plan: {path}\nAll canonical classes have eligible training and test annotations.")
+        return 0
+    if arguments.command == "prepareDataset":
+        import cv2
+
+        from futsal.datasetExport import prepareDataset
+
+        try:
+            contract = prepareDataset(arguments.plan, arguments.dataRoot, arguments.outputDir,
+                                      progress=lambda message: print(message, flush=True))
+        except (OSError, ValueError, cv2.error) as error:
+            parser.exit(2, f"Dataset preparation could not be completed: {error}\n")
+        print(f"Dataset: {arguments.outputDir}\nContract: {contract['contractId']}")
         return 0
     from futsal.catalog import loadCatalog, resolveSourcePath
     from futsal.inventory import buildInventory

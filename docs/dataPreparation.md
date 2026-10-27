@@ -103,3 +103,26 @@ Hashes support reproducibility; they are not an automated overlap audit.
 New directories are prepared beside their destination and renamed only after
 successful completion. Existing destinations and source-root outputs are refused;
 an interrupted operation does not publish a completed-looking directory.
+
+## Development dataset export
+
+```text
+uv run python -m futsal prepareDataset --dataRoot ../Python --plan outputs/curriculumPlan/plan.json --outputDir data/prepared/curriculumV1
+```
+
+Each task has `dataset.yaml`, `images/train`, `images/val`, and matching label
+directories. YAML paths are relative to the YAML directory and omit a test entry.
+Own frames retain their original resolution and use lossless PNG with compression
+level 1. Public images are copied byte-for-byte. Source paths and identifiers are
+preserved in the manifest; derived filenames use SHA-256 of the record ID.
+
+Videos are read sequentially, retrieving only selected development frames; frames
+outside reviewed ranges never become samples. A decoder failure or dimension
+mismatch stops publication. The manifest links exported rows to native annotations
+in the embedded plan and records converted targets and transformations. Source
+hashes are verified before and after export. The contract binds all output files.
+
+`review.md` links annotated previews of applicable quarantined development samples.
+Preview indices reference original annotations, and drawing clips are visualization
+only. Reserved test samples remain exclusively in plan metadata and never receive
+previews. Generic and role stages use own validation data, with public training only.
