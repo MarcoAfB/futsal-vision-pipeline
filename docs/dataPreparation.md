@@ -67,3 +67,17 @@ Test contains match02, match09 and match14, with eligible annotations for all
 25 classes. The rare lowerCornerSideB has 27 eligible test annotations and 61
 training annotations. Both parts of match07 remain in training. These are
 annotation eligibility counts; successful image decoding is checked during export.
+
+## Detection geometry
+
+Valid pixel boxes are normalized without clipping. Ball ellipses become their
+axis-aligned enclosing boxes. A native landmark point becomes a centered box of
+width 1/64 and height 1/36 of the image (30 by 30 pixels at 1920 by 1080).
+Only artificial landmark boxes are intersected with the image boundary; the
+transformation records whether truncation occurred. Original point coordinates
+remain available for later localization evaluation, including at image edges
+where a truncated box center differs from the original landmark.
+
+Public boxes keep their original normalized coordinates. Labels use twelve decimal
+places; a 1e-10 normalized-edge tolerance accommodates serialization rounding,
+not invalid source geometry. Quarantined samples cannot enter conversion.
