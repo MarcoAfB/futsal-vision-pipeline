@@ -149,9 +149,13 @@ rather than counted as a successfully inventoried empty dataset.
 
 ## Split constraints and current coverage limit
 
-No train, validation, or test assignment is frozen. The intended proportions are
-approximately 70/15/15 by reviewed own frame records, with whole original matches
-kept together. Public and synthetic sources do not enter that denominator.
+The read-only inventory leaves split assignment unassigned. Curriculum preparation
+now uses the frozen original-match assignment in `configs/splits.yaml`, with
+eligible annotations for all 25 classes in training and test. The intended
+proportions are approximately 70/15/15 by reviewed own frame records, with whole
+original matches kept together. Public and synthetic sources do not enter that
+denominator. See [dataset preparation](dataPreparation.md) for retained coverage
+and quarantine policy.
 
 Reviewed `lowerCornerSideB` annotations occur only in match09 (27 frames) and
 match10 (62 frames). Future assignment must keep support in training and test;

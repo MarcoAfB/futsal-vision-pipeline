@@ -1,5 +1,9 @@
 # Initial dataset audit
 
+This document records the original read-only inventory. Later task eligibility,
+quarantine decisions and frozen splits are documented in
+[dataset preparation](dataPreparation.md); the source findings below remain intact.
+
 Run from the project root:
 
 ```text

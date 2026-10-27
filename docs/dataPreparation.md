@@ -153,3 +153,46 @@ command retains its separate 0/1/2 exit-code contract. Keep the prepared bundle
 immutable and store future training outputs outside it. Test coverage here refers
 to eligible annotation metadata; test images remain unexported and undecoded as
 samples until a separate final-evaluation delivery.
+
+## Verified local preparation
+
+The Windows preparation completed using Python 3.13.5 and the project environment.
+The installed module was invoked through `.venv/Scripts/python.exe -m futsal` for
+the three commands above. Planning, export and standalone verification returned 0.
+
+| Dataset | Exported training images | Exported validation images |
+|---|---:|---:|
+| genericObjects | 3,398 | 541 |
+| roleObjects | 1,989 | 541 |
+| unified25 | 2,547 | 539 |
+
+These are 9,555 exported images across tasks, not 9,555 independent source images.
+The bundle is `data/prepared/curriculumV1`, with 19,198 contracted artifact files
+and 81 annotated quarantine previews. The 549 reserved test records remain in
+metadata; 540 are eligible for unified25 and cover all 25 canonical classes.
+The original 3,684-record denominator and retained proportions are reported above.
+
+Public quarantine contains 26 multiple-ball samples, five originally empty labels
+and one degenerate player box. The five invalid referee boxes do not remove images
+from these tasks. Unified25 quarantines 58 own records across all splits, including
+nine reserved test records. No original annotation was corrected or discarded.
+Derived landmark boxes were intersected at image edges 290 times in unified25
+training and 97 times in validation; their native coordinates remain in the plan.
+
+SHA-256 checks matched for 10,864 source media, annotation and evidence files before
+and after export. Standalone verification decoded all exported images, checked all
+labels and artifact hashes, and confirmed task/split membership. An additional
+sample from each of the eight development videos matched the original decoded
+frame pixels exactly, including montage frame 180. This is a frame extraction
+check, not certification of annotation correctness or athlete identity.
+
+Plan ID: `8220bf1dcf3e2fc54dec8c15fd6a8e2ef8dc531903709f4961cf89ae3b6047e7`.
+
+Contract ID: `3d7e7fe9ba0e45ee2bc4a0ac3f3a435ccd74c01285a26fa4eac6e595b4b1f0e1`.
+
+Ruff passed and all 131 tests passed. The last suite used
+`uv run --offline pytest --basetemp .pytest_cache/curriculumStandalone -q`.
+Tests use generated fixtures and include a single active stage, portability,
+modified labels and YAMLs, decoder interruption and source preservation.
+No training, model inference or scientific performance evaluation was performed.
+Backend compatibility and UTFPR GPU environment checks remain subsequent work.

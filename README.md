@@ -1,8 +1,9 @@
 # Futsal
 
-A reproducible foundation for futsal computer vision research. This first delivery
-focuses on source registration and read-only dataset auditing. Model training and
-sports statistics belong to subsequent stages.
+A reproducible foundation for futsal computer vision research, with source
+registration, read-only auditing and curriculum dataset preparation. The first
+experiment targets one detector for ball, four athlete classes and twenty court
+landmarks. Training and sports statistics belong to subsequent stages.
 
 ## Development
 
@@ -50,6 +51,28 @@ Outputs are replaced atomically per file, rather than as a single transaction.
 
 Read [source registration](docs/dataSources.md), [annotation formats](docs/annotationFormats.md),
 and the [initial audit](docs/initialAudit.md) for dataset-specific decisions and limitations.
+
+## Curriculum datasets
+
+Prepare the 2-to-3-to-25 class curriculum using the frozen original-match split:
+
+```text
+uv run python -m futsal planDataset --dataRoot ../Python --outputDir outputs/curriculumPlan
+uv run python -m futsal prepareDataset --dataRoot ../Python --plan outputs/curriculumPlan/plan.json --outputDir data/prepared/curriculumV1
+uv run python -m futsal verifyDataset --datasetDir data/prepared/curriculumV1
+```
+
+Planning and preparation require new output directories. Expected quarantine is
+recorded per task. All 25 canonical classes have eligible training and test
+annotations; the test images and labels remain reserved. Validation has no
+lowerCornerSideB support. Each stage has a portable `dataset.yaml` with training
+and validation only. Public annotations retain their original semantics and
+enter only compatible public training stages.
+
+The bundle includes source hashes, native observations, transformed labels,
+quarantine previews and a verifiable output contract. Read
+[dataset preparation](docs/dataPreparation.md) for source eligibility, split
+proportions, geometry rules, commands and limitations. No GPU packages are needed.
 
 ## Conventions
 
