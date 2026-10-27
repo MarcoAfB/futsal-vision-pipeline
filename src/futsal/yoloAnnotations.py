@@ -22,7 +22,7 @@ def coordinateFinding(fields):
     return None
 
 
-def readLabels(relativePath, source, labelEntries, dataRoot, issues):
+def readYoloAnnotations(relativePath, source, labelEntries, dataRoot, issues):
     result = {
         "path": relativePath,
         "sha256": None,
@@ -30,6 +30,7 @@ def readLabels(relativePath, source, labelEntries, dataRoot, issues):
         "empty": None,
         "sourceClassCounts": {},
         "canonicalClassCounts": {},
+        "observations": [],
     }
     try:
         content = resolveSourcePath(dataRoot, relativePath).read_bytes()
@@ -96,6 +97,32 @@ def readLabels(relativePath, source, labelEntries, dataRoot, issues):
         finding = coordinateFinding(fields[1:])
         if finding:
             issues.append({**context, "code": finding[0], "message": finding[1]})
+        coordinates = []
+        for value in fields[1:]:
+            try:
+                number = float(value)
+                coordinates.append(number if math.isfinite(number) else value)
+            except ValueError:
+                coordinates.append(value)
+        result["observations"].append(
+            {
+                "lineNumber": lineNumber,
+                "sourceClassId": classId,
+                "sourceLabel": entry.get("sourceLabel") if entry else None,
+                "mappingAction": entry["action"] if entry else "unmapped",
+                "canonicalClass": entry.get("targetClass") if entry else None,
+                "semanticClass": entry.get("semanticClass") if entry else None,
+                "shapeType": "box",
+                "coordinates": coordinates,
+                "geometryFindings": [finding[0]] if finding else [],
+            }
+        )
     result["sourceClassCounts"] = dict(sorted(sourceCounts.items()))
     result["canonicalClassCounts"] = dict(sorted(canonicalCounts.items()))
     return result
+
+
+def readLabels(relativePath, source, labelEntries, dataRoot, issues):
+    report = readYoloAnnotations(relativePath, source, labelEntries, dataRoot, issues)
+    del report["observations"]
+    return report

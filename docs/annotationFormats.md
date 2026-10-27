@@ -38,3 +38,8 @@ Class IDs use an explicit source mapping. Generic player roles retain their sour
 semantics without an invented team, and referees remain outside target counts.
 Parsed observations remain counted when geometry needs review; malformed rows and
 unknown IDs are reported with their annotation path and line number.
+
+Preparation can also read individual YOLO observations, retaining their source
+class ID, line number, normalized coordinates, mapping action and geometry
+findings. This does not change the inventory JSON contract. Invalid coordinates
+remain explicit rather than being silently corrected or dropped.

@@ -1,7 +1,7 @@
 import hashlib
 import json
 
-from futsal.yoloAnnotations import readLabels
+from futsal.yoloAnnotations import readLabels, readYoloAnnotations
 
 
 def testSourceClassesAndInvalidObservationsKeepTheirProvenance(tmp_path):
@@ -32,3 +32,24 @@ def testSourceClassesAndInvalidObservationsKeepTheirProvenance(tmp_path):
     assert {item["lineNumber"] for item in issues} == set(range(3, 9))
     assert path.read_text(encoding="utf-8") == content
     json.dumps(report, allow_nan=False)
+
+
+def testIndividualObservationsPreserveLineSemanticsAndInvalidCoordinates(tmp_path):
+    (tmp_path / "sample.txt").write_text(
+        "\n0 0.5 0.5 0.2 0.2\n3 nan 0.5 0.2 0.2\n1 text 0.5 0.2 0.2\n",
+        encoding="utf-8",
+    )
+    entries = {
+        0: {"action": "map", "targetClass": "ball", "sourceLabel": "ball"},
+        1: {"action": "preserve", "semanticClass": "player"},
+        3: {"action": "ignore", "semanticClass": "referee"},
+    }
+    issues = []
+    document = readYoloAnnotations("sample.txt", {"sourceId": "public"}, entries, tmp_path, issues)
+    assert [item["lineNumber"] for item in document["observations"]] == [2, 3, 4]
+    assert document["observations"][0]["coordinates"] == [0.5, 0.5, 0.2, 0.2]
+    assert document["observations"][1]["mappingAction"] == "ignore"
+    assert document["observations"][1]["coordinates"][0] == "nan"
+    assert document["observations"][2]["semanticClass"] == "player"
+    assert document["observations"][2]["geometryFindings"] == ["invalidCoordinates"]
+    json.dumps(document, allow_nan=False)
