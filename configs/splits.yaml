@@ -1,0 +1,25 @@
+schemaVersion: 1
+countingUnit: reviewedFrameRecord
+reviewedFrameCount: 3684
+targetFractions:
+  training: 0.7
+  validation: 0.15
+  test: 0.15
+selectionMethod: minimumAbsoluteDeviationThenRareTrainingSupportThenLexicographicGroups
+coverageTask: unified25
+ownEligibilitySha256: 5696e7055892d56ef5fcf3b42337c0920d02f66ce8377ad451eda1a1fe1f7eed
+assignments:
+  match01: validation
+  match02: test
+  match03: training
+  match04: training
+  match05: training
+  match06: training
+  match07: training
+  match08: training
+  match09: test
+  match10: training
+  match11: validation
+  match12: validation
+  match13: training
+  match14: test

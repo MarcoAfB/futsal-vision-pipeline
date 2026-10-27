@@ -39,3 +39,31 @@ do not affect eligibility: invalid referee geometry does not exclude an otherwis
 valid ball/player image. Generic athlete labels cannot acquire an invented role
 or team. Structural source failures block planning rather than reducing the
 authoritative reviewed frame denominator.
+
+## Frozen original-match splits
+
+Split selection enumerates original-match subsets. It first requires eligible
+coverage of every canonical class in training and test, and exactly the declared
+unsupported classes missing in validation. It then minimizes the sum of absolute
+deviations from the target reviewed-frame counts. Ties prefer more eligible rare
+class annotations in training, then lexicographically sorted training/validation/test
+match groups. Integer-scaled target counts avoid floating-point tie differences.
+
+The frozen configuration binds the assignment to a digest of own record IDs,
+match grouping, task targets and eligibility. Changing eligibility requires an
+explicit new split version rather than silently reusing or regenerating a split.
+Reports show both the original reviewed-frame denominator and the retained own
+frame denominator after task-specific quarantine.
+
+The frozen first assignment in `configs/splits.yaml` has the following support:
+
+| Split | Reviewed records | Fraction of 3,684 | Eligible unified25 records | Fraction of 3,626 |
+|---|---:|---:|---:|---:|
+| Training | 2,585 | 70.17% | 2,547 | 70.24% |
+| Validation | 550 | 14.93% | 539 | 14.86% |
+| Test | 549 | 14.90% | 540 | 14.89% |
+
+Test contains match02, match09 and match14, with eligible annotations for all
+25 classes. The rare lowerCornerSideB has 27 eligible test annotations and 61
+training annotations. Both parts of match07 remain in training. These are
+annotation eligibility counts; successful image decoding is checked during export.
