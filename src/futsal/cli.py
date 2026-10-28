@@ -37,9 +37,21 @@ def main(argv: list[str] | None = None) -> int:
     environmentParser = commands.add_parser("inspectEnvironment", help="Inspect the training device and packages.")
     environmentParser.add_argument("--device", default="cpu")
     environmentParser.add_argument("--outputDir", type=Path, required=True)
+    weightsParser = commands.add_parser("prepareWeights", help="Obtain official YOLO26 pretrained weights.")
+    weightsParser.add_argument("--modelSize", choices=["n", "s", "m", "l", "x"], default="n")
+    weightsParser.add_argument("--outputDir", type=Path, required=True)
     arguments = parser.parse_args(argv)
     if arguments.command is None:
         parser.print_help()
+        return 0
+    if arguments.command == "prepareWeights":
+        from futsal.modelWeights import prepareWeights
+
+        try:
+            metadata = prepareWeights(arguments.modelSize, arguments.outputDir)
+        except (OSError, ValueError) as error:
+            parser.exit(2, f"Weight preparation failed: {error}\n")
+        print(f"Weights: {arguments.outputDir / metadata['filename']}\nSHA-256: {metadata['sha256']}")
         return 0
     if arguments.command == "inspectEnvironment":
         from futsal.trainingEnvironment import inspectEnvironment, writeEnvironmentReport

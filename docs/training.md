@@ -18,3 +18,15 @@ The report can later be collected on UTFPR; its CUDA compatibility is not assume
 
 Ordinary tests stay offline and exclude the trainingIntegration marker. Native
 training tests are explicitly selected with that marker and the training extra.
+
+## Official initial weights
+
+```text
+uv run python -m futsal prepareWeights --modelSize n --outputDir data/modelWeights/yolo26n
+```
+
+This explicitly downloads the requested detection checkpoint from the official
+ultralytics/assets v8.4.0 release. A sidecar records origin, size and observed
+SHA-256. Existing destinations are refused and failed downloads are not published.
+Training requires the checkpoint and its matching sidecar and performs no implicit
+weight download. The SHA-256 binds the observed file; it is not an external signature.
