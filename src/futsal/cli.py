@@ -34,10 +34,23 @@ def main(argv: list[str] | None = None) -> int:
     prepareParser.add_argument("--outputDir", type=Path, required=True)
     verifyParser = commands.add_parser("verifyDataset", help="Verify a portable prepared dataset bundle.")
     verifyParser.add_argument("--datasetDir", type=Path, required=True)
+    environmentParser = commands.add_parser("inspectEnvironment", help="Inspect the training device and packages.")
+    environmentParser.add_argument("--device", default="cpu")
+    environmentParser.add_argument("--outputDir", type=Path, required=True)
     arguments = parser.parse_args(argv)
     if arguments.command is None:
         parser.print_help()
         return 0
+    if arguments.command == "inspectEnvironment":
+        from futsal.trainingEnvironment import inspectEnvironment, writeEnvironmentReport
+
+        try:
+            report = inspectEnvironment(arguments.device)
+            writeEnvironmentReport(report, arguments.outputDir)
+        except (OSError, ValueError) as error:
+            parser.exit(2, f"Environment inspection failed: {error}\n")
+        print(f"Training environment ready: {report['ready']}; report: {arguments.outputDir}")
+        return 0 if report["ready"] else 1
     if arguments.command == "verifyDataset":
         from futsal.datasetVerify import verifyDataset
 

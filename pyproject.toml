@@ -13,6 +13,28 @@ dependencies = [
   "opencv-python-headless>=4.10,<5",
 ]
 
+[project.optional-dependencies]
+training = [
+  "torch==2.9.1+cpu",
+  "torchvision==0.24.1+cpu",
+  "ultralytics-opencv-headless==8.4.190",
+]
+
+[tool.uv]
+required-environments = [
+  "sys_platform == 'win32' and platform_machine == 'AMD64'",
+  "sys_platform == 'linux' and platform_machine == 'x86_64'",
+]
+
+[tool.uv.sources]
+torch = [{ index = "pytorchCpu", extra = "training" }]
+torchvision = [{ index = "pytorchCpu", extra = "training" }]
+
+[[tool.uv.index]]
+name = "pytorchCpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
 [dependency-groups]
 dev = ["pytest>=8.3,<10", "ruff>=0.11,<1"]
 
@@ -27,7 +49,8 @@ testpaths = ["tests"]
 python_files = ["test[A-Z]*.py"]
 python_functions = ["test[A-Z]*"]
 python_classes = ["Test[A-Z]*"]
-addopts = "-ra --strict-markers"
+addopts = "-ra --strict-markers -m 'not trainingIntegration'"
+markers = ["trainingIntegration: optional native training tests without network access"]
 
 [tool.ruff]
 target-version = "py313"
