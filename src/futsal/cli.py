@@ -40,10 +40,25 @@ def main(argv: list[str] | None = None) -> int:
     weightsParser = commands.add_parser("prepareWeights", help="Obtain official YOLO26 pretrained weights.")
     weightsParser.add_argument("--modelSize", choices=["n", "s", "m", "l", "x"], default="n")
     weightsParser.add_argument("--outputDir", type=Path, required=True)
+    trainParser = commands.add_parser("train", help="Run the audited YOLO26 technical CPU smoke.")
+    trainParser.add_argument("--datasetDir", type=Path, required=True)
+    trainParser.add_argument("--config", type=Path, default=Path("configs/training/yolo26Smoke.yaml"))
+    trainParser.add_argument("--weights", type=Path, required=True)
+    trainParser.add_argument("--outputDir", type=Path, required=True)
     arguments = parser.parse_args(argv)
     if arguments.command is None:
         parser.print_help()
         return 0
+    if arguments.command == "train":
+        from futsal.trainingRun import runTraining
+
+        try:
+            run = runTraining(arguments.datasetDir, arguments.config, arguments.weights,
+                              arguments.outputDir, progress=lambda message: print(message, flush=True))
+        except (OSError, ValueError) as error:
+            parser.exit(2, f"Training could not start: {error}\n")
+        print(f"Training status: {run['status']}; record: {arguments.outputDir / 'run.json'}")
+        return 0 if run["status"] == "completed" else 1
     if arguments.command == "prepareWeights":
         from futsal.modelWeights import prepareWeights
 

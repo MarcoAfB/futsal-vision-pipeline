@@ -30,6 +30,7 @@ ultralytics/assets v8.4.0 release. A sidecar records origin, size and observed
 SHA-256. Existing destinations are refused and failed downloads are not published.
 Training requires the checkpoint and its matching sidecar and performs no implicit
 weight download. The SHA-256 binds the observed file; it is not an external signature.
+
 ## Development subsets
 
 `configs/training/yolo26Smoke.yaml` declares a CPU-only, FP32, one-epoch technical
@@ -69,3 +70,36 @@ no downloaded weights. Run it explicitly:
 ```text
 uv run --offline --extra training pytest -m trainingIntegration --basetemp .pytest_cache/nativeRun
 ```
+
+## Running and inspecting the technical smoke
+
+```text
+uv run --offline --extra training python -m futsal train --datasetDir data/prepared/curriculumV1 --weights data/modelWeights/yolo26n/yolo26n.pt --config configs/training/yolo26Smoke.yaml --outputDir outputs/training/yolo26SmokeSeed42
+```
+
+Every run requires a new directory. `run.json` is updated atomically from `running`
+to `completed`, `failed`, or `interrupted`. Configuration, source-code snapshot,
+Git commit/dirty state, lockfile, initial checkpoint, environment and input hashes
+are retained alongside selected record IDs and the prepared contract ID. The full
+bundle is independently verified before training; all its file hashes and exact
+membership are checked again afterward. Runtime images, labels and configuration
+are hashed before and after native use. Logs, batch losses, partial checkpoints,
+and failure details remain available after an error. Subsequent stages are stopped;
+there is no automatic resume or overwrite. Use a fresh process for each CLI run.
+
+Stage evidence is in `stages/stage01GenericObjects`, `stage02RoleObjects`, and
+`stage03Unified25`. Each contains `transferAudit.json`, `loaderAudit.json`,
+`effectiveArguments.json`, `optimizer.json`, `losses.jsonl`, native `results.csv`,
+`metrics.json`, and `weights/best.pt` and `last.pt`. Native messages are retained
+under `logs`. The next stage receives the prior `best.pt` hash, selected by the
+pinned backend's validation mAP50–95 fitness. Checkpoint tensors serialize as FP16
+by backend convention even though forward/backward computation uses FP32.
+
+Per-class metrics with zero validation support are JSON null, including
+`lowerCornerSideB`. Supported classes without detections have measured zero scores.
+These tiny development subsets establish execution and transfer compatibility;
+they provide no model-quality estimate or scientific comparison. No AP threshold
+defines success. Final test records remain reserved and are never evaluated.
+
+Exit code 0 means completed, 1 means a retained failed/interrupted run, and 2 means
+the command could not start because an input or output boundary was invalid.

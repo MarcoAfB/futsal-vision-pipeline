@@ -1,4 +1,5 @@
 import json
+import logging
 import math
 import os
 from pathlib import Path
@@ -68,6 +69,20 @@ def validationMetrics(metrics, names, support):
 
 
 def trainStage(config, task, stage, inputWeights, stageDir, runDir, runtimeEvidence):
+    from ultralytics.utils import LOGGER
+
+    logDir = Path(runDir) / "logs"
+    logDir.mkdir(exist_ok=True)
+    handler = logging.FileHandler(logDir / f"{stage['taskId']}.log", encoding="utf-8")
+    LOGGER.addHandler(handler)
+    try:
+        return trainNativeStage(config, task, stage, inputWeights, stageDir, runDir, runtimeEvidence)
+    finally:
+        LOGGER.removeHandler(handler)
+        handler.close()
+
+
+def trainNativeStage(config, task, stage, inputWeights, stageDir, runDir, runtimeEvidence):
     import torch
     from ultralytics.models.yolo.detect import DetectionTrainer
     from ultralytics.nn.tasks import load_checkpoint
@@ -121,14 +136,15 @@ def trainStage(config, task, stage, inputWeights, stageDir, runDir, runtimeEvide
             raise ValueError("Each stage must start a fresh optimizer and epoch zero.")
 
     def afterBatch(current):
-        losses = {key: float(value.detach().cpu()) for key, value in current.tloss.items()}
+        losses = {key: float(value.detach().cpu()) for key, value in current.loss_items.items()}
         if not all(math.isfinite(value) for value in losses.values()):
             raise ValueError("Training returned nonfinite losses.")
         with (stageDir / "losses.jsonl").open("a", encoding="utf-8") as output:
             output.write(json.dumps({"epoch": current.epoch, "losses": losses}, allow_nan=False) + "\n")
 
     def afterEpoch(current):
-        if not all(bool(torch.isfinite(value).all()) for value in current.model.state_dict().values()):
+        if not all(bool(torch.isfinite(value).all()) for model in (current.model, current.ema.ema)
+                   for value in model.state_dict().values()):
             raise ValueError("Training produced nonfinite model tensors.")
 
     trainer.add_callback("on_pretrain_routine_end", beforeTraining)

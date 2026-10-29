@@ -3,7 +3,7 @@ from types import SimpleNamespace
 import pytest
 
 from futsal.datasetFiles import readJson
-from futsal.trainingBackend import initializeBackend, trainStage, validationMetrics, verifyLoader
+from futsal.trainingBackend import initializeBackend, validationMetrics, verifyLoader
 from futsal.trainingData import copyRuntimeData, selectTrainingData
 
 
@@ -32,23 +32,29 @@ def testLoaderRejectsSilentAnnotationDrops(trainingBundle, tmp_path):
 
 
 @pytest.mark.trainingIntegration
-def testNativeCpuStagesProduceTwoThreeAndTwentyFiveClassCheckpoints(trainingBundle, tmp_path):
-    bundle, _, config = trainingBundle
+def testNativeCpuStagesProduceTwoThreeAndTwentyFiveClassCheckpoints(trainingBundle, tmp_path,
+                                                                  monkeypatch):
+    from futsal.modelWeights import prepareWeights
+    from futsal.trainingRun import runTraining
+
+    bundle, configFile, config = trainingBundle
     runDir = tmp_path / "nativeRun"
-    runDir.mkdir()
-    initializeBackend(runDir / "backend", config["numThreads"])
+    initializeBackend(tmp_path / "modelSetup", config["numThreads"])
     import torch
     from ultralytics.nn.tasks import DetectionModel
 
-    weights = runDir / "initial.pt"
-    torch.save({"model": DetectionModel("yolo26n.yaml", nc=80, verbose=False)}, weights)
-    selection = selectTrainingData(bundle, config)
-    evidence = copyRuntimeData(bundle, runDir, selection)
-    for index, stage in enumerate(config["stages"]):
-        stageDir = runDir / f"stage{index + 1}"
-        result = trainStage(config, selection["tasks"][stage["taskId"]], stage, weights,
-                            stageDir, runDir, evidence)
+    def fixtureDownload(url, destination):
+        torch.save({"model": DetectionModel("yolo26n.yaml", nc=80, verbose=False)}, destination)
+
+    monkeypatch.setattr("futsal.modelWeights.downloadWeights", fixtureDownload)
+    prepareWeights("n", tmp_path / "initial")
+    run = runTraining(bundle, configFile, tmp_path / "initial" / "yolo26n.pt", runDir)
+    assert run["status"] == "completed", run.get("error")
+    assert run["runtimeIntegrityAfterRun"]
+    assert run["bundleIntegrityAfterRun"]["hashesVerified"]
+    for index, stage in enumerate(run["stages"]):
+        result = stage["results"]
+        stageDir = runDir / stage["directory"]
         assert result["checkpoints"]["best"]["classCount"] == (2, 3, 25)[index]
         assert readJson(stageDir / "optimizer.json")["initialStateEntries"] == 0
-        weights = runDir / result["checkpoints"]["best"]["path"]
     assert result["perClass"]["lowerCornerSideB"]["ap50"] is None

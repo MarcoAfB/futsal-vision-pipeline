@@ -3,7 +3,8 @@
 A reproducible foundation for futsal computer vision research, with source
 registration, read-only auditing and curriculum dataset preparation. The first
 experiment targets one detector for ball, four athlete classes and twenty court
-landmarks. Training and sports statistics belong to subsequent stages.
+landmarks. An optional YOLO26 CPU technical smoke now validates the training
+curriculum; scientific training and sports statistics remain subsequent stages.
 
 ## Development
 
@@ -20,8 +21,18 @@ If pytest's system temporary directory is not writable, use a fresh project-loca
 directory: `uv run pytest --basetemp .pytest_cache/localTestRun`.
 
 The environment is isolated from the previous implementation. The dependency lockfile
-is part of the project. GPU dependencies are not installed in this stage; the UTFPR
-server environment will be checked before training.
+is part of the project. The optional training extra uses CPU wheels; the UTFPR
+server environment will be checked before scientific GPU training.
+
+## Technical training smoke
+
+Install `uv sync --locked --extra training`, inspect the local CPU environment,
+and prepare the explicit official YOLO26n weights. The `train` command then runs
+genericObjects -> roleObjects -> unified25 with 32 training records per stage,
+16 shared validation records, and one epoch per stage. It audits class-name
+checkpoint transfer and preserves the verified data bundle. Read
+[training instructions](docs/training.md) for commands, dependencies, evidence,
+failure handling and the limits of these technical metrics. Test data is reserved.
 
 ## Dataset inventory
 
