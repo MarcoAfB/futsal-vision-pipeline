@@ -1,0 +1,46 @@
+schemaVersion: 1
+purpose: technicalSmoke
+modelSize: n
+device: cpu
+seed: 42
+numThreads: 2
+trainSampleCount: 32
+validationSampleCount: 16
+stages:
+- taskId: genericObjects
+  epochs: 1
+- taskId: roleObjects
+  epochs: 1
+- taskId: unified25
+  epochs: 1
+parameters:
+  imgsz: 320
+  batch: 2
+  workers: 0
+  optimizer: SGD
+  lr0: 0.001
+  momentum: 0.937
+  weight_decay: 0.0005
+  warmup_epochs: 0.0
+  patience: 0
+  amp: false
+  deterministic: true
+  cache: false
+  plots: false
+  save: true
+  hsv_h: 0.0
+  hsv_s: 0.0
+  hsv_v: 0.0
+  degrees: 0.0
+  translate: 0.0
+  scale: 0.0
+  shear: 0.0
+  perspective: 0.0
+  flipud: 0.0
+  fliplr: 0.0
+  mosaic: 0.0
+  mixup: 0.0
+  copy_paste: 0.0
+  cutmix: 0.0
+  multi_scale: 0.0
+  close_mosaic: 0

@@ -30,3 +30,18 @@ ultralytics/assets v8.4.0 release. A sidecar records origin, size and observed
 SHA-256. Existing destinations are refused and failed downloads are not published.
 Training requires the checkpoint and its matching sidecar and performs no implicit
 weight download. The SHA-256 binds the observed file; it is not an external signature.
+# Development subsets
+
+`configs/training/yolo26Smoke.yaml` declares a CPU-only, FP32, one-epoch technical
+smoke run with 32 training records per stage and 16 shared validation records.
+Selection first covers available classes greedily, breaking ties and filling slots
+by SHA-256 of the seed, selection namespace, and record ID. Validation candidates
+are the intersection of eligible records across the requested stages. Every
+available validation class is retained; `lowerCornerSideB` remains unsupported.
+All declared training classes must be supported. Infeasible subset sizes fail.
+
+The run records full selected provenance and per-class support in `selection.json`.
+Selected images and labels are byte copies in `runtimeData`, with absolute runtime
+dataset roots. Runtime hashes detect backend repairs or changes. Source partitions,
+task quarantine, and the immutable prepared bundle are preserved. Backend label
+caches belong only to the run directory. No test images or labels are selected.
