@@ -132,11 +132,26 @@ transition. Probe evidence is in
 `outputs/environment/officialCanonicalTransferProbe/summary.json`. This probe did
 not read dataset samples or train a model.
 
-The planned real-data 32/16 smoke remains pending. The command above was attempted,
-but Windows denied reading `data/prepared/curriculumV1/plan.json`, including an
-elevated attempt. It stopped before creating a training run or consuming samples.
-Restore read access to the existing verified bundle, or provide an accessible copy
-with the same contract, then rerun the command with a new output directory. Real
-subset selection, training metrics and post-run bundle integrity are not yet
-verified by this delivery. Final test evaluation and UTFPR GPU compatibility remain
-outside this local technical validation.
+The initial real-data attempts were blocked by Windows directory ownership:
+temporary-directory publication had retained owner-only access, and the prepared
+bundle and initial weights had been created by different local users. The original
+files and their permissions were preserved. A byte-identical weight working copy
+was created in `data/modelWeights/yolo26nShared` with ordinary inherited project
+permissions, then the command was run as the prepared bundle's owner.
+
+On 2026-10-29 the real 32/16 smoke completed successfully in
+`outputs/training/yolo26SmokeSeed42`, using code commit `d565501` with a clean
+source snapshot. All three stages trained one epoch and produced verified 2, 3
+and 25 class best/last checkpoints. The shared validation records contain six
+match01, five match11 and five match12 frames. All 24 supported validation classes
+were retained; lowerCornerSideB remained unsupported with null metrics.
+
+Both project transitions verified 12 ball classification rows before training;
+COCO-to-generic loading had no matching class names. Losses were finite, optimizers
+were fresh and checkpoint end-to-end mode was preserved. Full preflight verified
+all 9,555 exported images and labels. Post-run verification confirmed the same
+19,199 files including contract.json, all artifact hashes and exact membership.
+Runtime copies and initial input evidence also retained their hashes. Training
+completed with exit code 0. The very low one-epoch detection scores are technical
+diagnostics and are not scientific performance estimates. Final test evaluation
+and UTFPR GPU compatibility remain outside this local validation.
