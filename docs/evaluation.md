@@ -20,3 +20,25 @@ indices and native point coordinates. A prediction JSONL contains one complete
 record per expected image, including empty detection lists. Missing, duplicate,
 unexpected, incorrectly sized or incorrectly classified records fail validation.
 Zero-area predicted boxes remain false-positive candidates rather than disappearing.
+
+## Metric definitions
+
+Operational matching is greedy in descending confidence, class-agnostic to expose
+class confusions, with one reference per prediction and IoU >= 0.50. Confidence
+>= 0.25 is included. A wrong-class association is both an FP for the predicted
+class and an FN for the reference class. The confusion matrix has true classes on
+rows, predicted classes on columns, and an explicit background row/column.
+AP matching is class-aware at each IoU threshold and uses the pinned native
+`ap_per_class` integration. Backend best-F1 precision/recall is not substituted
+for the fixed operational scores. Group averages are macro averages over supported
+classes, with both declared and supported class counts. Matches retain raw
+prediction indices, including when low-confidence predictions precede them.
+
+Landmark localization selects the highest-confidence prediction of each class,
+never the closest prediction to the reference. Missing points are unsuccessful
+in the tolerance success rate. Median and p90 error are conditional on an available
+prediction and are accompanied by the localized count. Errors use native points
+and the original image diagonal. Extra predictions, unsupported classes and the
+native-to-artificial-box center offset are retained separately. No correction of
+that representation offset is applied. Per-match values are descriptive; frames
+are not treated as independent statistical replicates.

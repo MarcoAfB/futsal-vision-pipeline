@@ -108,6 +108,11 @@ def validatePredictions(references, predictions, names, config):
         detections = row["detections"]
         if not isinstance(detections, list) or len(detections) > config["maxDetections"]:
             raise ValueError("Prediction count exceeds the declared detection limit.")
+        if "correctAtIou" in row and (len(row["correctAtIou"]) != len(detections) or any(
+            len(values) != 10 or any(type(value) is not bool for value in values)
+            for values in row["correctAtIou"]
+        )):
+            raise ValueError("Native AP evidence must contain ten boolean matches per detection.")
         for detection in detections:
             classId, score, box = detection["classId"], detection["confidence"], detection["box"]
             if type(classId) is not int or not 0 <= classId < len(names) or (
