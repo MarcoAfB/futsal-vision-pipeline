@@ -86,10 +86,17 @@ def trainNativeStage(config, task, stage, inputWeights, stageDir, runDir, runtim
     import torch
     from ultralytics.models.yolo.detect import DetectionTrainer
     from ultralytics.nn.tasks import load_checkpoint
+    from ultralytics.utils.torch_utils import strip_optimizer
 
     stageDir, runDir = Path(stageDir), Path(runDir)
 
     class AuditedDetectionTrainer(DetectionTrainer):
+        def run_callbacks(self, event):
+            for key, values in self.callbacks.items():
+                self.callbacks[key] = [callback for callback in values if callback.__module__ in
+                                       {"ultralytics.utils.callbacks.base", __name__}]
+            super().run_callbacks(event)
+
         def get_dataset(self):
             data, _ = readYaml(Path(self.args.data))
             root = runDir / "runtimeData" / stage["taskId"]
@@ -110,13 +117,28 @@ def trainNativeStage(config, task, stage, inputWeights, stageDir, runDir, runtim
             writeJson(stageDir / "transferAudit.json", audit)
             return model
 
+        def final_eval(self):
+            for path in (self.last, self.best):
+                if path.is_file():
+                    strip_optimizer(path)
+            if not self.best.is_file():
+                raise ValueError("Training did not produce a best checkpoint.")
+            originalEma = self.ema.ema
+            try:
+                self.ema.ema, _ = load_checkpoint(self.best, device=self.device, fuse=False)
+                self.ema.ema.args = self.args
+                self.metrics = self.validator(trainer=self)
+                self.metrics.pop("fitness", None)
+            finally:
+                self.ema.ema = originalEma
+
     overrides = {**config["parameters"], "model": str(Path(inputWeights).resolve()),
                  "data": str(runDir / "runtimeData" / stage["taskId"] / "dataset.yaml"),
                  "project": str(stageDir.parent), "name": stageDir.name, "exist_ok": False,
                  "epochs": stage["epochs"], "device": config["device"], "seed": config["seed"],
                  "task": "detect", "mode": "train", "resume": False, "pretrained": True,
                  "cls_remap": True, "split": "val", "val": True, "fraction": 1.0,
-                 "single_cls": False, "classes": None, "compile": False, "nbs": 2}
+                 "single_cls": False, "classes": None, "compile": False, "nbs": 2, "nms": False}
     trainer = AuditedDetectionTrainer(overrides=overrides)
     if trainer.save_dir.resolve() != stageDir.resolve():
         raise ValueError("Backend changed the requested new stage directory.")
@@ -160,18 +182,21 @@ def trainNativeStage(config, task, stage, inputWeights, stageDir, runDir, runtim
     ):
         raise ValueError("Validation did not process the exact selected annotations.")
     result = validationMetrics(metrics, names, task["validationSupport"])
+    result["validationModel"] = "bestCheckpointReloadedAsFp32"
     checkpoints = {}
     for kind in ("best", "last"):
         path = Path(getattr(trainer, kind))
         model, _ = load_checkpoint(path, device="cpu", fuse=False)
         if model.names != dict(enumerate(names)):
             raise ValueError(f"{kind} checkpoint ontology differs from the stage classes.")
+        if not model.end2end or model.model[-1].nc != len(names):
+            raise ValueError(f"{kind} checkpoint lost the YOLO26 end-to-end detection contract.")
         classificationKeys(model)
         if not all(bool(torch.isfinite(value).all()) for value in model.state_dict().values()):
             raise ValueError(f"{kind} checkpoint contains nonfinite tensors.")
         checkpoints[kind] = {"path": path.relative_to(runDir).as_posix(),
                              "sha256": hashFile(path), "byteSize": path.stat().st_size,
-                             "classCount": len(names), "names": names}
+                             "classCount": len(names), "names": names, "end2end": model.end2end}
     result["checkpoints"] = checkpoints
     result["losses"] = {key: float(value.detach().cpu()) for key, value in trainer.tloss.items()}
     writeJson(stageDir / "metrics.json", result)

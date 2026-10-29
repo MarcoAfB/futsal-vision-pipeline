@@ -57,6 +57,12 @@ Each stage starts a new optimizer from the previous stage's `best.pt`, without r
 
 The native adapter supplies the verified runtime-only detection configuration
 directly, avoiding the backend's generic dataset downloader and font download.
+Only native base callbacks and local audit callbacks execute; external platform
+and analytics callbacks are excluded even if a platform API key is configured.
+Final validation reloads `best.pt` as FP32 and reuses the verified runtime loaders
+through the trainer context, avoiding the generic standalone dataset loader.
+Explicit `nms=false` preserves YOLO26 end-to-end inference during validation and
+in both saved checkpoints; the head class count and mode are checked after saving.
 It checks exact image membership and label rows in both native dataloaders before
 the first batch. Silent duplicate removal, corrupt-image exclusion or JPEG repair
 fails the stage. CPU execution uses two threads and nominal batch size two so each

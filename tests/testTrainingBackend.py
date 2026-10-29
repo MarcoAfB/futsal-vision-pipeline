@@ -42,6 +42,29 @@ def testNativeCpuStagesProduceTwoThreeAndTwentyFiveClassCheckpoints(trainingBund
     initializeBackend(tmp_path / "modelSetup", config["numThreads"])
     import torch
     from ultralytics.nn.tasks import DetectionModel
+    from ultralytics.utils import callbacks
+
+    networkCalls = []
+
+    def rejectNetwork(*arguments, **keywords):
+        networkCalls.append(True)
+        raise AssertionError("Native tests must stay offline.")
+
+    monkeypatch.setattr("urllib.request.urlopen", rejectNetwork)
+    monkeypatch.setattr("requests.sessions.Session.request", rejectNetwork)
+    monkeypatch.setenv("ULTRALYTICS_API_KEY", "testKeyMustNeverBeUsed")
+    originalCallbacks = callbacks.add_integration_callbacks
+
+    def rejectPlatform(trainer):
+        raise AssertionError("External callbacks must not execute.")
+
+    rejectPlatform.__module__ = "ultralytics.utils.callbacks.platform"
+
+    def addForbiddenCallback(instance):
+        originalCallbacks(instance)
+        instance.callbacks["on_pretrain_routine_start"].append(rejectPlatform)
+
+    monkeypatch.setattr(callbacks, "add_integration_callbacks", addForbiddenCallback)
 
     def fixtureDownload(url, destination):
         torch.save({"model": DetectionModel("yolo26n.yaml", nc=80, verbose=False)}, destination)
@@ -56,5 +79,7 @@ def testNativeCpuStagesProduceTwoThreeAndTwentyFiveClassCheckpoints(trainingBund
         result = stage["results"]
         stageDir = runDir / stage["directory"]
         assert result["checkpoints"]["best"]["classCount"] == (2, 3, 25)[index]
+        assert result["checkpoints"]["best"]["end2end"]
         assert readJson(stageDir / "optimizer.json")["initialStateEntries"] == 0
     assert result["perClass"]["lowerCornerSideB"]["ap50"] is None
+    assert networkCalls == []

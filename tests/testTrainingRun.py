@@ -72,6 +72,7 @@ def testRunPreservesFailedStageAndNeverStartsLaterStages(trainingBundle, localWe
     assert result["stages"][0]["status"] == "completed"
     assert (runDir / result["stages"][1]["directory"] / "partial.pt").read_bytes() == b"partial"
     assert result["bundleIntegrityAfterRun"]["hashesVerified"]
+    assert type(failure).__name__ in (runDir / "failure.txt").read_text()
 
 
 def testRuntimeMutationFailsWithoutChangingPreparedBundle(trainingBundle, localWeights,

@@ -1,6 +1,7 @@
 import json
 import shutil
 import subprocess
+import traceback
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -129,6 +130,7 @@ def runTraining(datasetDir, configPath, weightsPath, outputDir, progress=print):
     except (Exception, KeyboardInterrupt) as error:
         run["status"] = "interrupted" if isinstance(error, KeyboardInterrupt) else "failed"
         run["error"] = {"type": type(error).__name__, "message": str(error)}
+        (runDir / "failure.txt").write_text(traceback.format_exc(), encoding="utf-8")
         if run["stages"] and run["stages"][-1]["status"] == "running":
             run["stages"][-1].update(status=run["status"], endedAt=utcNow())
         saveRun(runDir, run)
