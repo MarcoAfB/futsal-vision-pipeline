@@ -45,3 +45,11 @@ Selected images and labels are byte copies in `runtimeData`, with absolute runti
 dataset roots. Runtime hashes detect backend repairs or changes. Source partitions,
 task quarantine, and the immutable prepared bundle are preserved. Backend label
 caches belong only to the run directory. No test images or labels are selected.
+
+Transfer uses the pinned backend's native class-name remapping. Target names are
+assigned before loading. A structured pre-batch audit compares compatible backbone
+and hidden-head tensors and hashes every shared classification row in both `cv3`
+and `one2one_cv3`. Only exact normalized names match: `ball` survives both project
+transitions; `player` does not become a role or team by index. COCO `sports ball`
+is not aliased to `ball`. New class weights must not equal an unrelated source row.
+Each stage starts a new optimizer from the previous stage's `best.pt`, without resume.
