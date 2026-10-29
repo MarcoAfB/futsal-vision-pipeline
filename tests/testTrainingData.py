@@ -1,28 +1,10 @@
 from pathlib import Path
 
 import pytest
-import yaml
 
-from futsal.datasetExport import prepareDataset
 from futsal.datasetFiles import readJson, verifyEvidence
-from futsal.datasetPlan import buildDatasetPlan, writeDatasetPlan
 from futsal.trainingConfig import loadTrainingConfig
 from futsal.trainingData import copyRuntimeData, selectRows, selectTrainingData
-
-
-@pytest.fixture
-def trainingBundle(preparedSources):
-    dataRoot, configPath, planDir = preparedSources
-    plan = buildDatasetPlan(configPath, dataRoot)
-    planPath = writeDatasetPlan(plan, planDir, dataRoot)
-    bundle = planDir.parent / "bundle"
-    prepareDataset(planPath, dataRoot, bundle, progress=lambda message: None)
-    configuration = yaml.safe_load(Path("configs/training/yolo26Smoke.yaml").read_text())
-    configuration.update(trainSampleCount=1, validationSampleCount=2)
-    configFile = planDir.parent / "smoke.yaml"
-    configFile.write_text(yaml.safe_dump(configuration))
-    config = loadTrainingConfig(configFile, plan["recipe"])
-    return bundle, configFile, config
 
 
 def testSharedSelectionCopiesBytesWithoutReservedTestOrLinks(trainingBundle, tmp_path):
@@ -60,6 +42,8 @@ def testGreedySelectionIsOrderIndependentAndRejectsImpossibleCoverage():
 
 
 def testTrainingConfigurationRejectsUnsafeOverridesAndStageOrder(trainingBundle):
+    import yaml
+
     bundle, configFile, config = trainingBundle
     recipe = readJson(bundle / "plan.json")["recipe"]
     config["parameters"]["resume"] = True

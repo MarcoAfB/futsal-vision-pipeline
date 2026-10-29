@@ -30,7 +30,7 @@ ultralytics/assets v8.4.0 release. A sidecar records origin, size and observed
 SHA-256. Existing destinations are refused and failed downloads are not published.
 Training requires the checkpoint and its matching sidecar and performs no implicit
 weight download. The SHA-256 binds the observed file; it is not an external signature.
-# Development subsets
+## Development subsets
 
 `configs/training/yolo26Smoke.yaml` declares a CPU-only, FP32, one-epoch technical
 smoke run with 32 training records per stage and 16 shared validation records.
@@ -53,3 +53,19 @@ and `one2one_cv3`. Only exact normalized names match: `ball` survives both proje
 transitions; `player` does not become a role or team by index. COCO `sports ball`
 is not aliased to `ball`. New class weights must not equal an unrelated source row.
 Each stage starts a new optimizer from the previous stage's `best.pt`, without resume.
+
+The native adapter supplies the verified runtime-only detection configuration
+directly, avoiding the backend's generic dataset downloader and font download.
+It checks exact image membership and label rows in both native dataloaders before
+the first batch. Silent duplicate removal, corrupt-image exclusion or JPEG repair
+fails the stage. CPU execution uses two threads and nominal batch size two so each
+batch can update the optimizer. Actual optimizer groups and effective backend
+arguments are recorded. Batch losses, model tensors, and saved checkpoints must
+remain finite. Both checkpoint ontologies are checked after every stage.
+
+The optional native test trains all three stages on a tiny synthetic bundle with
+no downloaded weights. Run it explicitly:
+
+```text
+uv run --offline --extra training pytest -m trainingIntegration --basetemp .pytest_cache/nativeRun
+```

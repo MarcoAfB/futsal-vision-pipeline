@@ -98,6 +98,9 @@ def copyRuntimeData(datasetDir, runDir, selection):
                          "names": dict(enumerate(task["classes"]))}
         (taskRoot / "dataset.yaml").write_text(yaml.safe_dump(configuration, sort_keys=False),
                                                 encoding="utf-8")
+        path = taskRoot / "dataset.yaml"
+        evidence.append({"path": path.relative_to(runDir).as_posix(),
+                         "byteSize": path.stat().st_size, "sha256": hashFile(path)})
     verifyEvidence(runDir, evidence)
     writeJson(runDir / "runtimeEvidence.json", evidence)
     writeJson(runDir / "selection.json", selection)

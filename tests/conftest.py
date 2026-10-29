@@ -163,3 +163,30 @@ def preparedSources(tmp_path):
                         ("curriculum.yaml", recipe)):
         (configRoot / name).write_text(yaml.safe_dump(value, sort_keys=False), encoding="utf-8")
     return dataRoot, configRoot / "curriculum.yaml", tmp_path / "plan"
+
+
+@pytest.fixture
+def trainingBundle(preparedSources):
+    from futsal.datasetExport import prepareDataset
+    from futsal.datasetPlan import buildDatasetPlan, writeDatasetPlan
+    from futsal.trainingConfig import loadTrainingConfig
+
+    dataRoot, configPath, planDir = preparedSources
+    for path in dataRoot.glob("video*.xml"):
+        tree = ElementTree.parse(path)
+        for track in tree.getroot().findall("track"):
+            for box in track.findall("box"):
+                offset = int(track.attrib["id"]) * 3
+                box.set("xtl", str(20 + offset))
+                box.set("xbr", str(30 + offset))
+        tree.write(path, encoding="utf-8")
+    plan = buildDatasetPlan(configPath, dataRoot)
+    planPath = writeDatasetPlan(plan, planDir, dataRoot)
+    bundle = planDir.parent / "bundle"
+    prepareDataset(planPath, dataRoot, bundle, progress=lambda message: None)
+    configuration = yaml.safe_load(Path("configs/training/yolo26Smoke.yaml").read_text())
+    configuration.update(trainSampleCount=1, validationSampleCount=2)
+    configFile = planDir.parent / "smoke.yaml"
+    configFile.write_text(yaml.safe_dump(configuration))
+    config = loadTrainingConfig(configFile, plan["recipe"])
+    return bundle, configFile, config
