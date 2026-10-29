@@ -109,3 +109,34 @@ defines success. Final test records remain reserved and are never evaluated.
 
 Exit code 0 means completed, 1 means a retained failed/interrupted run, and 2 means
 the command could not start because an input or output boundary was invalid.
+
+## Local validation status
+
+On 2026-10-28 the Windows CPU environment inspection succeeded with Python 3.13.5,
+PyTorch 2.9.1+cpu, torchvision 0.24.1+cpu and the pinned headless backend.
+Ruff passed and the ordinary suite passed all 145 tests. The optional native suite
+passed both integration tests, including a complete 2 -> 3 -> 25 run on synthetic
+data with one training image per stage and two shared validation images. It checked
+fresh optimizers, both checkpoint heads, saved class counts, end-to-end inference,
+unsupported metrics, runtime preservation and the synthetic bundle's final hashes.
+Requests and urllib network entry points were blocked in that native run, and an
+injected external platform callback was prevented from executing.
+
+The official pretrained checkpoint downloaded successfully and loaded as YOLO26n
+with 80 source classes, 2,572,280 parameters and 12 classification tensors across
+the two branches. Its 5,544,453 bytes have observed SHA-256
+`9b09cc8bf347f0fc8a5f7657480587f25db09b34bf33b0652110fb03a8ad4fef`.
+An additional load-only probe using the actual project class names verified 696
+compatible tensors per transition and all 12 `ball` rows in each project-to-project
+transition. Probe evidence is in
+`outputs/environment/officialCanonicalTransferProbe/summary.json`. This probe did
+not read dataset samples or train a model.
+
+The planned real-data 32/16 smoke remains pending. The command above was attempted,
+but Windows denied reading `data/prepared/curriculumV1/plan.json`, including an
+elevated attempt. It stopped before creating a training run or consuming samples.
+Restore read access to the existing verified bundle, or provide an accessible copy
+with the same contract, then rerun the command with a new output directory. Real
+subset selection, training metrics and post-run bundle integrity are not yet
+verified by this delivery. Final test evaluation and UTFPR GPU compatibility remain
+outside this local technical validation.

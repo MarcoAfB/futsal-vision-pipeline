@@ -194,5 +194,7 @@ Ruff passed and all 131 tests passed. The last suite used
 `uv run --offline pytest --basetemp .pytest_cache/curriculumStandalone -q`.
 Tests use generated fixtures and include a single active stage, portability,
 modified labels and YAMLs, decoder interruption and source preservation.
-No training, model inference or scientific performance evaluation was performed.
-Backend compatibility and UTFPR GPU environment checks remain subsequent work.
+At this preparation checkpoint, no training, model inference or scientific
+performance evaluation was performed. See [training](training.md) for the later
+CPU backend validation and the pending real-data smoke. UTFPR GPU environment
+checks remain subsequent work.
