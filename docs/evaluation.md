@@ -138,3 +138,38 @@ Optional checks are explicit and stay offline:
 uv run --offline --extra training pytest -m trainingIntegration
 uv run --offline --extra reporting pytest -m reportingIntegration
 ```
+
+## Verified local delivery
+
+On 2026-10-29 (local time), archived-checkpoint evaluation completed on the real
+CPU technical smoke run, without retraining. Each of the three stages evaluated
+the same 16 own validation records: six from match01, five from match11 and five
+from match12. All 24 supported unified classes were retained; lowerCornerSideB
+has no validation references and remains N/A. Each derived macro AP50-95 exactly
+matched its recorded native validator value. Six qualitative examples per stage
+include the same three fixed records across the curriculum.
+
+The sealed evaluation is in
+`outputs/reports/yolo26SmokeSeed42/runValidation-20261030T003633987272Z`.
+Training used clean commit `d565501`; evaluation used clean commit `8dffbd0`.
+The dataset contract, complete bundle membership/hashes, validation runtime copies
+and archived training inputs retained their integrity. No test images were used.
+These one-epoch results establish execution and report compatibility, not a
+scientific performance baseline.
+
+`outputs/reports/yolo26SmokeSeed42/presentationReplay/report.md` is an updated
+presentation of that same sealed evidence. A second independent regeneration in
+`outputs/verification/reportingOnly` succeeded with torch, torchvision and
+ultralytics physically absent from the environment. The locked training and
+reporting environment was restored afterward. All three bundles retained identical
+evaluation contracts and evidence; artifact hashes, Markdown file links, PNG
+decoding and SVG parsing passed. Class/support, point-localization and qualitative
+panels were also inspected visually. A summary is retained locally in
+`outputs/verification/researchDelivery.json`.
+
+Ruff passed and the regular suite passed 160 tests. Three optional native tests
+passed, including synthetic run/full validation, offline execution and native AP
+parity. Two optional presentation tests passed again in the reporting-only
+environment. Full real validation was not requested or run; final test evaluation,
+threshold calibration, scientific training and UTFPR GPU compatibility remain
+subsequent work.
