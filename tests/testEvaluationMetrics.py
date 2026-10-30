@@ -34,6 +34,7 @@ def testWrongClassesAndDuplicatesHaveTraceableOperationalCounts():
     assert result["confusionMatrix"][0][1] == 1
     assert result["matches"][0]["predictionIndex"] == 1
     assert result["imageErrors"][0]["ballMisses"] == 1
+    assert result["imageErrors"][0]["athleteErrors"] == 1
 
 
 def testNoPredictionsAndZeroAreaBoxesCannotBecomeTruePositives():
@@ -85,3 +86,11 @@ def testAveragePrecisionMatchesPinnedNativeMatching(tmp_path, monkeypatch):
     assert np.array_equal(result["matches"][0]["correctAtIou"], matched.numpy())
     assert 0.99 <= result["perClass"]["ball"]["ap50"] <= 1
     assert result["perClass"]["absent"]["ap50"] is None
+    tiedReferences = [{"recordId": "false", "targets": []}, {"recordId": "true", "targets": truth}]
+    tiedPredictions = [{"detections": [prediction(0, [0, 0, 10, 10], 0.5)], "nativeOrder": 1,
+                        "correctAtIou": [[False] * 10]},
+                       {"detections": [prediction(0, [0, 0, 10, 10], 0.5)], "nativeOrder": 0,
+                        "correctAtIou": [[True] * 10]}]
+    replay = nativeAveragePrecision(tiedReferences, tiedPredictions, ["ball"], protocol())
+    assert replay["matches"][0]["recordId"] == "true"
+    assert replay["perClass"]["ball"]["ap50"] >= 0.99

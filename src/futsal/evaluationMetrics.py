@@ -31,7 +31,7 @@ def matchBoxes(targets, detections, threshold, sameClass=False):
     return matches
 
 
-def operationalMetrics(references, predictions, names, config):
+def operationalMetrics(references, predictions, names, config, pointClasses=()):
     count = len(names)
     matrix = np.zeros((count + 1, count + 1), dtype=int)
     evidence, imageErrors = [], []
@@ -43,7 +43,7 @@ def operationalMetrics(references, predictions, names, config):
         usedTruth, usedPredicted = set(), set()
         errors = {"recordId": reference["recordId"], "matchId": reference["matchId"],
                   "falsePositives": 0, "falseNegatives": 0, "classConfusions": 0, "ballMisses": 0,
-                  "highestFalsePositiveConfidence": 0.0}
+                  "athleteErrors": 0, "highestFalsePositiveConfidence": 0.0}
         for truthIndex, predictionIndex, overlap in matches:
             truthClass, predictedClass = targets[truthIndex]["classId"], detections[predictionIndex]["classId"]
             matrix[truthClass, predictedClass] += 1
@@ -58,6 +58,8 @@ def operationalMetrics(references, predictions, names, config):
                 errors["falsePositives"] += 1
                 errors["falseNegatives"] += 1
                 errors["ballMisses"] += names[truthClass] == "ball"
+                errors["athleteErrors"] += sum(name != "ball" and name not in pointClasses
+                                                for name in (names[truthClass], names[predictedClass]))
                 errors["highestFalsePositiveConfidence"] = max(
                     errors["highestFalsePositiveConfidence"], detections[predictionIndex]["confidence"])
         for index, item in enumerate(targets):
@@ -65,12 +67,14 @@ def operationalMetrics(references, predictions, names, config):
                 matrix[item["classId"], count] += 1
                 errors["falseNegatives"] += 1
                 errors["ballMisses"] += names[item["classId"]] == "ball"
+                errors["athleteErrors"] += names[item["classId"]] != "ball" and names[item["classId"]] not in pointClasses
                 evidence.append({"recordId": reference["recordId"], "referenceIndex": index,
                                  "predictionIndex": None, "iou": None, "kind": "falseNegative"})
         for index, item in enumerate(detections):
             if index not in usedPredicted:
                 matrix[count, item["classId"]] += 1
                 errors["falsePositives"] += 1
+                errors["athleteErrors"] += names[item["classId"]] != "ball" and names[item["classId"]] not in pointClasses
                 errors["highestFalsePositiveConfidence"] = max(errors["highestFalsePositiveConfidence"],
                                                                item["confidence"])
                 evidence.append({"recordId": reference["recordId"], "referenceIndex": None,
@@ -147,7 +151,7 @@ def aggregateGroups(perClass, pointClasses):
 
 
 def scoreDetectionSubset(references, predictions, names, pointClasses, config):
-    operational = operationalMetrics(references, predictions, names, config)
+    operational = operationalMetrics(references, predictions, names, config, pointClasses)
     averagePrecision = nativeAveragePrecision(references, predictions, names, config)
     for row in operational["perClass"]:
         row.update(averagePrecision["perClass"][row["className"]])

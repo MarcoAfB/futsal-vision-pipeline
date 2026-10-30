@@ -25,6 +25,18 @@ def testExampleSelectionIsStableAndDoesNotLabelPerfectCasesAsFailures():
     assert [item["recordId"] for item in selected] == fixed
 
 
+def testHardExamplesKeepAthleteFailuresVisibleBesideManyLandmarkMisses():
+    config = loadEvaluationConfig(Path("configs/evaluation/researchValidation.yaml"))
+    errors = [{"recordId": recordId, "falsePositives": 0, "falseNegatives": count,
+               "ballMisses": 0, "classConfusions": 0, "athleteErrors": athlete,
+               "highestFalsePositiveConfidence": 0}
+              for recordId, count, athlete in (("fixed", 0, 0), ("athlete", 2, 2), ("points", 100, 0))]
+    points = {"perClass": [{"className": "landmark"}], "errors": [
+        {"recordId": "points", "distanceDiagonal": 0.2, "annotated": True}]}
+    selected = selectExamples(["fixed"], {"imageErrors": errors}, points, config)
+    assert selected[1] == {"recordId": "athlete", "reason": "athleteDetectionErrors"}
+
+
 @pytest.fixture
 def reportEvaluation(trainingBundle, tmp_path):
     bundle, _, trainingConfig = trainingBundle
