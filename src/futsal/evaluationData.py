@@ -3,8 +3,17 @@ import math
 from pathlib import Path
 
 from futsal.catalog import hashFile, readYaml
-from futsal.datasetFiles import readJson
+from futsal.datasetFiles import readJson, validateNewOutput
 from futsal.recipes import activeTasks
+
+
+def validateResearchOutput(outputDir, inputRoots, protectedPaths=()):
+    project = Path(__file__).resolve().parents[2]
+    roots = [*map(Path, inputRoots), project / "src", project / "configs", project.parent / "Python"]
+    output = Path(outputDir).resolve()
+    for root in roots:
+        validateNewOutput(output, root, [*roots, *protectedPaths])
+    return output
 
 
 def loadEvaluationConfig(path):
@@ -101,6 +110,11 @@ def validatePredictions(references, predictions, names, config):
     byId = {row["recordId"]: row for row in predictions}
     if len(byId) != len(predictions) or set(byId) != {row["recordId"] for row in references}:
         raise ValueError("Prediction membership is missing, duplicated or unexpected.")
+    if any("nativeOrder" in row for row in predictions) and (
+        any(type(row.get("nativeOrder")) is not int for row in predictions) or
+        {row["nativeOrder"] for row in predictions} != set(range(len(predictions)))
+    ):
+        raise ValueError("Native image order must identify each evaluated image exactly once.")
     for reference in references:
         row = byId[reference["recordId"]]
         if row["dimensions"] != reference["dimensions"]:

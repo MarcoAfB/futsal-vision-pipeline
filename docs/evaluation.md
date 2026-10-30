@@ -42,3 +42,22 @@ and the original image diagonal. Extra predictions, unsupported classes and the
 native-to-artificial-box center offset are retained separately. No correction of
 that representation offset is applied. Per-match values are descriptive; frames
 are not treated as independent statistical replicates.
+
+## Archived evaluation
+
+The local validation adapter loads each archived best checkpoint as FP32 on CPU,
+with the training image size, batch configuration and explicit YOLO26 end-to-end
+mode. It uses native validation through a read-only trainer context, without an
+optimizer or the generic dataset downloader. Native matching masks and image order
+are captured alongside original-pixel predictions. Retaining native order also
+preserves AP semantics when scores tie. Final and per-match AP reuse those masks;
+rescaling/clipping boxes for display cannot change the recorded native AP matches.
+
+The evaluation binds the training run, checkpoint hashes, exact selection, protocol,
+code snapshot, native references, predictions, metrics, and small example source
+archive. A sealed evaluation contract protects those inputs. Working image/label
+copies and caches live in short `outputs/evaluationWork` directories, outside the
+report bundle and archived training run. The short workspace avoids Windows path
+limits for long SHA-256 image filenames. Failure traces and partial results remain;
+later stages do not execute after a failed stage. Bundle and runtime hashes are
+checked afterward, including after a backend error.

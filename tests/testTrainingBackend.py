@@ -83,3 +83,25 @@ def testNativeCpuStagesProduceTwoThreeAndTwentyFiveClassCheckpoints(trainingBund
         assert readJson(stageDir / "optimizer.json")["initialStateEntries"] == 0
     assert result["perClass"]["lowerCornerSideB"]["ap50"] is None
     assert networkCalls == []
+    from futsal.evaluationRun import evaluateRun
+
+    evaluationDir = tmp_path / "researchEvaluation"
+    evaluation = evaluateRun(runDir, bundle, "configs/evaluation/researchValidation.yaml",
+                             "runValidation", evaluationDir)
+    assert evaluation["status"] == "completed", evaluation.get("error")
+    assert evaluation["runtimeAfter"] and evaluation["bundleAfter"]["hashesVerified"]
+    for stage in evaluation["stages"]:
+        evidenceDir = evaluationDir / stage["evidenceDirectory"]
+        assert readJson(evidenceDir / "detection.json")["imageCount"] == 2
+        scores = readJson(evidenceDir / "detection.json")["groups"]["all"]
+        assert scores["ap50To95"] == pytest.approx(stage["nativeValidationMetrics"]["metrics/mAP50-95(B)"], abs=1e-12)
+        assert len(stage["recordIds"]) == 2
+    point = readJson(evaluationDir / "evidence" / "unified25" / "points.json")
+    unsupported = next(row for row in point["perClass"] if row["className"] == "lowerCornerSideB")
+    assert unsupported["successRates"]["0.01"] is None
+    assert networkCalls == []
+    full = evaluateRun(runDir, bundle, "configs/evaluation/researchValidation.yaml",
+                       "fullValidation", tmp_path / "fullValidation")
+    assert full["status"] == "completed", full.get("error")
+    assert full["selection"] == "fullValidation"
+    assert all(stage["imageCount"] == 2 for stage in full["stages"])

@@ -98,7 +98,10 @@ def nativeAveragePrecision(references, predictions, names, config):
     from ultralytics.utils.metrics import ap_per_class
 
     correct, confidence, predictedClasses, targetClasses, evidence = [], [], [], [], []
-    for reference, prediction in zip(references, predictions, strict=True):
+    pairs = list(zip(references, predictions, strict=True))
+    if predictions and all("nativeOrder" in row for row in predictions):
+        pairs.sort(key=lambda pair: pair[1]["nativeOrder"])
+    for reference, prediction in pairs:
         detections = prediction["detections"]
         if "correctAtIou" in prediction:
             mask = np.array(prediction["correctAtIou"], dtype=bool).reshape(len(detections), 10)
