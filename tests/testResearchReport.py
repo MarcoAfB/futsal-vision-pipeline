@@ -1,3 +1,4 @@
+import csv
 import shutil
 from pathlib import Path
 
@@ -9,7 +10,7 @@ from futsal.evaluationMetrics import aggregateGroups, operationalMetrics
 from futsal.evaluationRun import sealEvaluation
 from futsal.pointMetrics import scorePoints
 from futsal.researchExamples import fixedExamples, selectExamples
-from futsal.researchReport import renderReport, renderTrainingReport
+from futsal.researchReport import renderReport, renderTrainingReport, stageTables
 
 
 def testExampleSelectionIsStableAndDoesNotLabelPerfectCasesAsFailures():
@@ -115,3 +116,16 @@ def testFailedTrainingReportKeepsUnexecutedStagesVisible(tmp_path):
     assert "roleObjects | notExecuted" in report.read_text()
     assert "Research evaluation: **not executed**" in report.read_text()
     assert not list(report.parent.rglob("*.png"))
+
+
+def testMatchPointSuccessTablesRetainToleranceAndReferenceDenominator(reportEvaluation, tmp_path):
+    detection = readJson(reportEvaluation / "evidence" / "genericObjects" / "detection.json")
+    summary = {"className": "point", "support": 2, "localizedCount": 1, "successRates": {"0.01": 0.5}}
+    points = {"perClass": [summary], "errors": [{"recordId": "frame", "nativePoint": [0, 0], "predictedPoint": None}],
+              "byMatch": {"matchB": {"perClass": [summary]}}}
+    directory = tmp_path / "tables"
+    stageTables(detection, points, directory)
+    with (directory / "matchPointToleranceSuccess.csv").open(newline="") as stream:
+        rows = list(csv.DictReader(stream))
+    assert rows == [{"matchId": "matchB", "className": "point", "support": "2",
+                     "toleranceDiagonal": "0.01", "successRate": "0.5"}]

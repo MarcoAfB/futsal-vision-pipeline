@@ -98,6 +98,10 @@ def stageTables(detection, points, directory):
         writeCsv(directory / "pointErrors.csv", errors)
         writeCsv(directory / "matchPointLocalization.csv", [{"matchId": matchId, **{key: value for key, value in row.items()
                     if key != "successRates"}} for matchId, values in points["byMatch"].items() for row in values["perClass"]])
+        writeCsv(directory / "matchPointToleranceSuccess.csv", [{"matchId": matchId, "className": row["className"],
+                 "support": row["support"], "toleranceDiagonal": tolerance, "successRate": rate}
+                 for matchId, values in points["byMatch"].items() for row in values["perClass"]
+                 for tolerance, rate in row["successRates"].items()])
 
 
 def stageMarkdown(root, state, stage):
@@ -185,6 +189,7 @@ def stageMarkdown(root, state, stage):
                      row["successRates"][key], row["medianDistanceDiagonal"], row["p90DistanceDiagonal"],
                      row["truncatedTargets"], row["medianTargetCenterOffsetDiagonal"]] for row in points["perClass"]]),
                   f"[Localization by original match]({taskId}/tables/matchPointLocalization.csv). "
+                  f"[Success rates by match and tolerance]({taskId}/tables/matchPointToleranceSuccess.csv). "
                   "The proxy-center offset describes artificial-box representation; no offset correction is applied.", ""]
         if "points" in figures:
             lines += [f"![Point localization]({taskId}/figures/{figures['points']})", ""]
@@ -241,7 +246,7 @@ def reportMarkdown(root, state):
                  "reviewedOwnFraction": values["reviewedFraction"], "eligibleOwnRecords": values["eligibleFrameCount"],
                  "eligibleOwnFraction": values["eligibleFraction"], "quarantinedOwnRecords": values["quarantinedFrameCount"]}
                 for taskId, splits in state["ownSplitSummaries"].items()
-                for split, values in sorted(splits.items())]
+                for split, values in sorted(splits.items(), key=lambda item: ("training", "validation", "test").index(item[0]))]
         (root / "tables").mkdir()
         writeCsv(root / "tables" / "ownSplitContext.csv", rows)
         lines += ["## Frozen own-data partition context", "",
