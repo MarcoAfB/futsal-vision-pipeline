@@ -166,6 +166,9 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+reporting = [
+    { name = "matplotlib" },
+]
 training = [
     { name = "torch" },
     { name = "torchvision" },
@@ -180,13 +183,14 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "matplotlib", marker = "extra == 'reporting'", specifier = "==3.11.2" },
     { name = "opencv-python-headless", specifier = ">=4.10,<5" },
     { name = "pyyaml", specifier = ">=6.0.2,<7" },
     { name = "torch", marker = "extra == 'training'", specifier = "==2.9.1+cpu", index = "https://download.pytorch.org/whl/cpu", conflict = { package = "futsal", extra = "training" } },
     { name = "torchvision", marker = "extra == 'training'", specifier = "==0.24.1+cpu", index = "https://download.pytorch.org/whl/cpu", conflict = { package = "futsal", extra = "training" } },
     { name = "ultralytics-opencv-headless", marker = "extra == 'training'", specifier = "==8.4.190" },
 ]
-provides-extras = ["training"]
+provides-extras = ["reporting", "training"]
 
 [package.metadata.requires-dev]
 dev = [

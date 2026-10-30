@@ -61,3 +61,21 @@ report bundle and archived training run. The short workspace avoids Windows path
 limits for long SHA-256 image filenames. Failure traces and partial results remain;
 later stages do not execute after a failed stage. Bundle and runtime hashes are
 checked afterward, including after a backend error.
+
+## Figures and visual examples
+
+The optional `reporting` extra provides the already-locked Matplotlib version
+without installing model packages. Figures use the Agg backend and export SVG and
+PNG with stable SVG identifiers and no embedded generation date. Tiny positive AP
+values use an explicitly labelled zoomed axis; unsupported classes remain N/A.
+Single-epoch histories and uninformative PR/confusion plots are omitted. Point
+success plots retain the annotated and missing counts, including when all rates
+are zero. Class, match and point plots are separate within each task.
+
+Qualitative panels place native references and operational predictions side by
+side. Point references are crosses; predictions are box centers with displacement
+segments. Stable class colours and numeric class IDs reference the class table.
+An annotated ball receives a separate enlarged detail strip below the full image,
+so the crop does not hide the court. Up to three seed-42 shared cases and three
+explicitly ranked difficult cases are retained per stage. Archived source examples
+are deduplicated by image hash; the full validation image gallery is not exported.

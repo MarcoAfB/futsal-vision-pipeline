@@ -14,6 +14,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+reporting = ["matplotlib==3.11.2"]
 training = [
   "torch==2.9.1+cpu",
   "torchvision==0.24.1+cpu",
@@ -49,8 +50,11 @@ testpaths = ["tests"]
 python_files = ["test[A-Z]*.py"]
 python_functions = ["test[A-Z]*"]
 python_classes = ["Test[A-Z]*"]
-addopts = "-ra --strict-markers -m 'not trainingIntegration'"
-markers = ["trainingIntegration: optional native training tests without network access"]
+addopts = "-ra --strict-markers -m 'not trainingIntegration and not reportingIntegration'"
+markers = [
+  "trainingIntegration: optional native training tests without network access",
+  "reportingIntegration: optional offline figure-rendering tests without a model backend",
+]
 
 [tool.ruff]
 target-version = "py313"
