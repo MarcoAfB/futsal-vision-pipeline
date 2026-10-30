@@ -10,7 +10,7 @@ from futsal.evaluationMetrics import aggregateGroups, operationalMetrics
 from futsal.evaluationRun import sealEvaluation
 from futsal.pointMetrics import scorePoints
 from futsal.researchExamples import fixedExamples, selectExamples
-from futsal.researchReport import renderReport, renderTrainingReport, stageTables
+from futsal.researchReport import renderReport, renderTrainingReport, stageTables, verifyEvaluation
 
 
 def testExampleSelectionIsStableAndDoesNotLabelPerfectCasesAsFailures():
@@ -129,3 +129,10 @@ def testMatchPointSuccessTablesRetainToleranceAndReferenceDenominator(reportEval
         rows = list(csv.DictReader(stream))
     assert rows == [{"matchId": "matchB", "className": "point", "support": "2",
                      "toleranceDiagonal": "0.01", "successRate": "0.5"}]
+
+
+def testUnsealedOptionalHistoryCannotInfluenceAResearchReport(reportEvaluation):
+    (reportEvaluation / "evidence" / "genericObjects" / "results.csv").write_text(
+        "epoch,metrics/mAP50-95(B)\n1,1.0\n2,1.0\n")
+    with pytest.raises(ValueError, match="membership"):
+        verifyEvaluation(reportEvaluation)

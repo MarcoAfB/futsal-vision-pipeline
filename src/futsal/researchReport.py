@@ -46,6 +46,9 @@ def verifyEvaluation(root):
         key: value for key, value in contract.items() if key != "contractId"
     }) or hashFile(root / "evaluation.json") != contract["evaluationSha256"]:
         raise ValueError("Evaluation metadata or evidence contract changed.")
+    observed = {path.relative_to(root).as_posix() for path in (root / "evidence").rglob("*") if path.is_file()}
+    if observed != {item["path"] for item in contract["artifacts"]}:
+        raise ValueError("Evaluation evidence membership changed; unsealed additions are refused.")
     verifyEvidence(root, contract["artifacts"])
     state = readJson(root / "evaluation.json")
     if state["status"] == "running":
