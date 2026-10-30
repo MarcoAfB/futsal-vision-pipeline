@@ -79,3 +79,22 @@ An annotated ball receives a separate enlarged detail strip below the full image
 so the crop does not hide the court. Up to three seed-42 shared cases and three
 explicitly ranked difficult cases are retained per stage. Archived source examples
 are deduplicated by image hash; the full validation image gallery is not exported.
+
+## Markdown report bundles
+
+Each evaluation has one `report.md`, equally prominent task chapters, task-specific
+`tables`, `figures` and `examples`, plus sealed `evidence`. The report includes
+original-match counts, actual training sources, support in images and instances,
+task-specific quarantine and frozen own split proportions, transfer/optimizer
+audits, operational confusions, native-point errors and traceable examples.
+Unsupported values display as N/A and remain empty cells in CSV rather than zeros.
+Conditional localization error is always accompanied by the detected/missing counts.
+
+Presentation files are separate from the sealed evaluation inputs. Regeneration
+verifies the contract, copies the portable evidence into a new directory and uses
+only archived numbers and selected source images. It never reruns inference.
+`reportState.json` records independent presentation status, rendering package
+versions, source-code snapshots and artifact hashes. Failed or unevaluated training
+runs can receive execution-only reports without invented research scores. The
+catalogue groups presentations by training run and creation time, without rankings;
+failed presentations remain discoverable through their state file.
