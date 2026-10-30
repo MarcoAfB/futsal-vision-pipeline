@@ -4,6 +4,7 @@ import os
 import platform
 import shutil
 from collections import Counter, defaultdict
+from datetime import datetime
 from importlib.metadata import version
 from pathlib import Path
 
@@ -18,6 +19,12 @@ from futsal.trainingRun import fileEvidence, utcNow
 
 def number(value):
     return "N/A" if value is None else f"{value:.6g}" if isinstance(value, float) else str(value)
+
+
+def elapsedSeconds(record, endField="endedAt"):
+    if not record.get("startedAt") or not record.get(endField):
+        return None
+    return (datetime.fromisoformat(record[endField]) - datetime.fromisoformat(record["startedAt"])).total_seconds()
 
 
 def markdownTable(headers, rows):
@@ -123,7 +130,8 @@ def stageMarkdown(root, state, stage):
         selected = readJson(selectionPath)["tasks"][taskId]["training"]
         lines += markdownTable(["Training source", "Selected images"], sorted(Counter(row["sourceId"] for row in selected).items()))
     if training:
-        lines += [f"Training stage: {training['startedAt']} to {training.get('completedAt', 'unavailable')}.", ""]
+        lines += [f"Training stage elapsed: {number(elapsedSeconds(training, 'completedAt'))} s "
+                  "(including setup and validation).", ""]
     if (evidenceDir / "transferAudit.json").is_file():
         audit = readJson(evidenceDir / "transferAudit.json")
         optimizer = readJson(evidenceDir / "optimizer.json")
@@ -208,6 +216,9 @@ def reportMarkdown(root, state):
     lines = ["# Validation research report", "", f"Run: **{state['trainingRunId']}**. Purpose: **{state['purpose']}**.", "",
              *markdownTable(["Training", "Evaluation", "Selection", "Test evaluated"],
                             [[state["training"]["status"], state["status"], state["selection"], False]]),
+             *markdownTable(["Training command elapsed (s)", "Research evaluation elapsed (s)"],
+                            [[elapsedSeconds(state["training"]), elapsedSeconds(state)]]),
+             "Elapsed times include integrity verification and processing overhead; they are not inference benchmarks.", "",
              "Each curriculum stage is a different task. Stage scores are not a ranking or evidence that "
              "the curriculum improves performance. This technical smoke does not estimate scientific model quality.", "",
              "## Reading guide", "", *[f"- [{stage['taskId']}](#{stage['taskId'].lower()})" for stage in state["stages"]], "",
@@ -236,7 +247,8 @@ def reportMarkdown(root, state):
         lines += ["## Frozen own-data partition context", "",
                   "Reviewed proportions use the original reviewed-record denominator. Effective proportions use "
                   "eligible own records after each task's quarantine. Public training images are counted separately "
-                  "in the stage sections. Test rows below are metadata only; test images are not read.", "",
+                  "in the stage sections. This is eligibility metadata, not each stage's source selection; "
+                  "actual training sources follow in the stage chapters. Test rows are metadata only; test images are not read.", "",
                   *markdownTable(["Stage", "Split", "Reviewed own", "Reviewed %", "Eligible own", "Effective %", "Quarantined own"],
                    [[row["taskId"], row["split"], row["reviewedOwnRecords"], 100 * row["reviewedOwnFraction"],
                      row["eligibleOwnRecords"], 100 * row["eligibleOwnFraction"], row["quarantinedOwnRecords"]] for row in rows]),

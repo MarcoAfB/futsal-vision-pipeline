@@ -98,3 +98,43 @@ versions, source-code snapshots and artifact hashes. Failed or unevaluated train
 runs can receive execution-only reports without invented research scores. The
 catalogue groups presentations by training run and creation time, without rankings;
 failed presentations remain discoverable through their state file.
+
+## Commands and lifecycle
+
+From the project root, install the CPU evaluation and lightweight presentation extras:
+
+```text
+uv sync --locked --extra training --extra reporting
+uv run --offline --extra training python -m futsal evaluateRun --runDir outputs/training/yolo26SmokeSeed42 --datasetDir data/prepared/curriculumV1 --selection runValidation --outputDir outputs/reports/yolo26SmokeSeed42/runValidationReview
+```
+
+That command evaluates all completed stages and renders the report. An explicit
+`--selection fullValidation` evaluates the task-specific complete own validation
+sets in a separate new output directory. Full validation is never run implicitly.
+Neither command accepts a test selection. Existing destinations are refused.
+
+```text
+uv run --offline --extra reporting python -m futsal reportRun --evaluationDir outputs/reports/yolo26SmokeSeed42/runValidationReview --outputDir outputs/reports/yolo26SmokeSeed42/presentationReplay
+uv run --offline --extra reporting python -m futsal reportRun --runDir outputs/training/interruptedRun --outputDir outputs/reports/interruptedRun/executionReview
+```
+
+The first command regenerates from sealed evidence without a model backend. The
+second creates an execution-only report, including stages that were never run.
+Open `outputs/reports/index.md` for the catalogue, then a presentation's `report.md`.
+CSV tables and vector figures are linked from each equally prominent stage chapter.
+
+New `train` CLI runs automatically evaluate their recorded validation subset and
+publish a report. `--evaluationConfig` selects a different explicit evaluation
+protocol. Training, evaluation and presentation retain separate statuses. If
+research processing fails, the training archive stays unchanged and a failure
+record remains discoverable in the catalogue. Successful complete commands return
+0, retained partial/failed/interrupted processing returns 1, and research input or
+rendering errors return 2. A presentation of a failed training run can itself
+complete successfully; its report still identifies the failed training status.
+
+Optional checks are explicit and stay offline:
+
+```text
+uv run --offline --extra training pytest -m trainingIntegration
+uv run --offline --extra reporting pytest -m reportingIntegration
+```

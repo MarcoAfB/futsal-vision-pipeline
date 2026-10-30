@@ -110,6 +110,12 @@ defines success. Final test records remain reserved and are never evaluated.
 Exit code 0 means completed, 1 means a retained failed/interrupted run, and 2 means
 the command could not start because an input or output boundary was invalid.
 
+The current `train` CLI also generates a validation research report after training.
+Evaluation and report states are separate from the immutable training archive;
+research processing failures return 1 while preserving the actual training status.
+Use `--evaluationConfig` to select the reporting protocol. See
+[evaluation and reports](evaluation.md) for standalone commands and regeneration.
+
 ## Local validation status
 
 On 2026-10-28 the Windows CPU environment inspection succeeded with Python 3.13.5,

@@ -45,10 +45,21 @@ def main(argv: list[str] | None = None) -> int:
     trainParser.add_argument("--config", type=Path, default=Path("configs/training/yolo26Smoke.yaml"))
     trainParser.add_argument("--weights", type=Path, required=True)
     trainParser.add_argument("--outputDir", type=Path, required=True)
+    trainParser.add_argument("--evaluationConfig", type=Path, default=Path("configs/evaluation/researchValidation.yaml"))
+    from futsal.researchCli import addResearchCommands
+
+    addResearchCommands(commands)
     arguments = parser.parse_args(argv)
     if arguments.command is None:
         parser.print_help()
         return 0
+    if arguments.command in {"evaluateRun", "reportRun"}:
+        from futsal.researchCli import handleResearchCommand
+
+        try:
+            return handleResearchCommand(arguments)
+        except (OSError, ValueError, ImportError) as error:
+            parser.exit(2, f"Research command could not complete: {error}\n")
     if arguments.command == "train":
         from futsal.trainingRun import runTraining
 
@@ -58,7 +69,15 @@ def main(argv: list[str] | None = None) -> int:
         except (OSError, ValueError) as error:
             parser.exit(2, f"Training could not start: {error}\n")
         print(f"Training status: {run['status']}; record: {arguments.outputDir / 'run.json'}")
-        return 0 if run["status"] == "completed" else 1
+        from futsal.researchCli import generateRunReport
+
+        try:
+            complete, path = generateRunReport(arguments.outputDir, arguments.datasetDir, arguments.evaluationConfig)
+        except (OSError, ValueError, ImportError) as error:
+            print(f"Research report could not start: {error}")
+            return 1
+        print(f"Research report: {path}")
+        return 0 if run["status"] == "completed" and complete else 1
     if arguments.command == "prepareWeights":
         from futsal.modelWeights import prepareWeights
 

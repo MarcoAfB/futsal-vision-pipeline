@@ -34,6 +34,22 @@ checkpoint transfer and preserves the verified data bundle. Read
 [training instructions](docs/training.md) for commands, dependencies, evidence,
 failure handling and the limits of these technical metrics. Test data is reserved.
 
+## Validation research reports
+
+New training CLI runs publish an English Markdown report with equally prominent
+chapters for all curriculum stages. Reports include class and original-match
+results, fixed-threshold detection errors, native court-point localization,
+support and quarantine context, selected reference/prediction panels, and exact
+checkpoint/data/code provenance. Research results and technical execution status
+remain distinct. Final test data is never evaluated by these commands.
+
+`evaluateRun` evaluates archived best checkpoints on either the recorded validation
+subset or an explicitly requested full validation set. `reportRun` regenerates
+presentation from sealed evidence without model inference. After generation,
+open `outputs/reports/index.md`, then the linked `report.md`. Tables are CSV,
+plots are SVG/PNG, and qualitative examples are a small deterministic selection.
+See [evaluation and reporting](docs/evaluation.md) for commands and metric definitions.
+
 ## Dataset inventory
 
 From the project root, point `dataRoot` at the directory containing the original
