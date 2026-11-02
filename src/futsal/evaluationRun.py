@@ -4,6 +4,7 @@ import traceback
 from datetime import UTC, datetime
 from pathlib import Path
 
+import futsal
 from futsal.catalog import hashFile, resolveSourcePath
 from futsal.datasetFiles import hashJson, readJson, verifyEvidence, writeJson
 from futsal.evaluationBackend import predictValidation
@@ -115,7 +116,7 @@ def evaluateRun(runDir, datasetDir, configPath, selection, outputDir, progress=p
         key: value for key, value in contract.items() if key != "contractId"
     }):
         raise ValueError("Evaluation dataset contract differs from the verified training input.")
-    workDir = Path(__file__).resolve().parents[2] / "outputs" / "evaluationWork" / hashJson(str(outputDir))[:16]
+    workDir = Path(futsal.__file__).resolve().parents[2] / "outputs" / "evaluationWork" / hashJson(str(outputDir))[:16]
     validateResearchOutput(workDir, [datasetDir, runDir], [Path(configPath)])
     outputDir.mkdir(parents=True)
     (outputDir / "evidence").mkdir()

@@ -2,6 +2,7 @@ import shutil
 import urllib.request
 from pathlib import Path
 
+import futsal
 from futsal.catalog import hashFile
 from futsal.datasetFiles import readJson, stagedDirectory, writeJson
 
@@ -17,7 +18,7 @@ def prepareWeights(modelSize, outputDir):
         raise ValueError("YOLO26 modelSize must be n, s, m, l or x.")
     filename = f"yolo26{modelSize}.pt"
     url = f"https://github.com/ultralytics/assets/releases/download/v8.4.0/{filename}"
-    with stagedDirectory(outputDir, Path(__file__).resolve().parent) as staging:
+    with stagedDirectory(outputDir, Path(futsal.__file__).resolve().parent) as staging:
         destination = staging / filename
         downloadWeights(url, destination)
         if destination.stat().st_size == 0:

@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 
+import futsal
 from futsal.catalog import hashFile
 from futsal.datasetFiles import hashJson, readJson, writeJson
 from futsal.evaluationData import (
@@ -10,8 +11,16 @@ from futsal.evaluationData import (
     evaluationTasks,
     loadEvaluationConfig,
     validatePredictions,
+    validateResearchOutput,
 )
 from futsal.trainingData import selectTrainingData
+
+
+@pytest.mark.parametrize("directory", ["src", "configs", "../Python"])
+def testResearchOutputProtectionUsesTheProjectRoot(tmp_path, directory):
+    projectRoot = Path(futsal.__file__).resolve().parents[2]
+    with pytest.raises(ValueError, match="outside dataRoot"):
+        validateResearchOutput(projectRoot / directory / "mustNotBeCreated", [tmp_path])
 
 
 @pytest.fixture

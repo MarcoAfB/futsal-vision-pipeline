@@ -5,6 +5,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import futsal
 from futsal.datasetFiles import stagedDirectory, writeJson
 
 
@@ -68,7 +69,7 @@ def inspectEnvironment(device="cpu"):
 
 
 def writeEnvironmentReport(report, outputDir):
-    with stagedDirectory(outputDir, Path(__file__).resolve().parent) as staging:
+    with stagedDirectory(outputDir, Path(futsal.__file__).resolve().parent) as staging:
         writeJson(staging / "environment.json", report)
         lines = ["# Training environment", "", f"Ready: {report['ready']}",
                  f"Device: {report['requestedDevice']}", f"Python: {report['pythonVersion']}", ""]

@@ -2,13 +2,14 @@ import json
 import math
 from pathlib import Path
 
+import futsal
 from futsal.catalog import hashFile, readYaml
 from futsal.datasetFiles import readJson, validateNewOutput
 from futsal.recipes import activeTasks
 
 
 def validateResearchOutput(outputDir, inputRoots, protectedPaths=()):
-    project = Path(__file__).resolve().parents[2]
+    project = Path(futsal.__file__).resolve().parents[2]
     roots = [*map(Path, inputRoots), project / "src", project / "configs", project.parent / "Python"]
     output = Path(outputDir).resolve()
     for root in roots:

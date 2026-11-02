@@ -8,6 +8,7 @@ from datetime import datetime
 from importlib.metadata import version
 from pathlib import Path
 
+import futsal
 from futsal.catalog import hashFile, resolveSourcePath
 from futsal.datasetFiles import hashJson, readJson, verifyEvidence, writeJson
 from futsal.evaluationData import readJsonLines, validateResearchOutput
@@ -57,13 +58,16 @@ def verifyEvaluation(root):
 
 
 def archiveRenderer(root):
+    packageRoot = Path(futsal.__file__).resolve().parent
     directory = root / "presentation" / "src" / "futsal"
     directory.mkdir(parents=True)
-    for source in sorted(Path(__file__).parent.glob("*.py")):
-        shutil.copyfile(source, directory / source.name)
+    for source in sorted(packageRoot.rglob("*.py")):
+        target = directory / source.relative_to(packageRoot)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, target)
     return {"python": platform.python_version(), "matplotlib": version("matplotlib"),
             "numpy": version("numpy"), "opencv": version("opencv-python-headless"),
-            "files": [fileEvidence(path, root) for path in sorted(directory.glob("*.py"))]}
+            "files": [fileEvidence(path, root) for path in sorted(directory.rglob("*.py"))]}
 
 
 def stageTables(detection, points, directory):

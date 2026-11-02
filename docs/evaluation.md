@@ -99,6 +99,11 @@ runs can receive execution-only reports without invented research scores. The
 catalogue groups presentations by training run and creation time, without rankings;
 failed presentations remain discoverable through their state file.
 
+Renderer snapshots preserve the complete package tree recursively, including
+subpackage initializers and distinct modules with the same filename in different
+directories. Runtime project paths are anchored to the top-level package so moving
+a module into a subpackage does not change output protections or workspace roots.
+
 ## Commands and lifecycle
 
 From the project root, install the CPU evaluation and lightweight presentation extras:

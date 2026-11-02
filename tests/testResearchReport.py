@@ -4,13 +4,40 @@ from pathlib import Path
 
 import pytest
 
+import futsal
+from futsal import researchReport
 from futsal.datasetFiles import readJson, verifyEvidence, writeJson
 from futsal.evaluationData import buildReferences, loadEvaluationConfig, writeJsonLines
 from futsal.evaluationMetrics import aggregateGroups, operationalMetrics
 from futsal.evaluationRun import sealEvaluation
 from futsal.pointMetrics import scorePoints
 from futsal.researchExamples import fixedExamples, selectExamples
-from futsal.researchReport import renderReport, renderTrainingReport, stageTables, verifyEvaluation
+from futsal.researchReport import (
+    archiveRenderer,
+    renderReport,
+    renderTrainingReport,
+    stageTables,
+    verifyEvaluation,
+)
+
+
+def testRendererArchivesNestedModulesWithoutFlattening(tmp_path, monkeypatch):
+    packageRoot = tmp_path / "source" / "futsal"
+    modules = {"__init__.py": "", "training/config.py": "value = 'training'\n",
+               "reporting/config.py": "value = 'reporting'\n", "reporting/__init__.py": ""}
+    for name, content in modules.items():
+        path = packageRoot / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+    monkeypatch.setattr(futsal, "__file__", str(packageRoot / "__init__.py"))
+    monkeypatch.setattr(researchReport, "version", lambda name: "fixtureVersion")
+    root = tmp_path / "presentationBundle"
+    result = archiveRenderer(root)
+    archived = root / "presentation" / "src" / "futsal"
+    assert {path.relative_to(archived).as_posix(): path.read_text(encoding="utf-8")
+            for path in archived.rglob("*.py")} == modules
+    assert {row["path"] for row in result["files"]} == {f"presentation/src/futsal/{name}" for name in modules}
+    verifyEvidence(root, result["files"])
 
 
 def testExampleSelectionIsStableAndDoesNotLabelPerfectCasesAsFailures():

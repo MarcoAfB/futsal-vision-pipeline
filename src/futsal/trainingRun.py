@@ -5,6 +5,7 @@ import traceback
 from datetime import UTC, datetime
 from pathlib import Path
 
+import futsal
 from futsal.catalog import hashFile
 from futsal.datasetFiles import readJson, validateNewOutput, verifyEvidence, writeJson
 from futsal.datasetVerify import verifyDataset
@@ -32,7 +33,7 @@ def fileEvidence(path, root):
 
 
 def snapshotCode(runDir):
-    projectRoot = Path(__file__).resolve().parents[2]
+    projectRoot = Path(futsal.__file__).resolve().parents[2]
     def gitOutput(*arguments):
         return subprocess.run(["git", *arguments], cwd=projectRoot, capture_output=True,
                               text=True, check=True).stdout.strip()
@@ -86,7 +87,7 @@ def executeStages(config, selection, initialWeights, runDir, run, evidence, prog
 def runTraining(datasetDir, configPath, weightsPath, outputDir, progress=print):
     datasetDir, configPath, weightsPath = (Path(path).resolve() for path in
                                            (datasetDir, configPath, weightsPath))
-    projectRoot = Path(__file__).resolve().parents[2]
+    projectRoot = Path(futsal.__file__).resolve().parents[2]
     protected = [configPath, weightsPath, projectRoot / "src", projectRoot / "configs",
                  projectRoot / "pyproject.toml", projectRoot / "uv.lock"]
     runDir = validateNewOutput(outputDir, datasetDir, protected)
