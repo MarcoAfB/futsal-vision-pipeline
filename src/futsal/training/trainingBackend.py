@@ -4,9 +4,9 @@ import math
 import os
 from pathlib import Path
 
-from futsal.checkpointTransfer import classificationKeys, loadAudited
 from futsal.datasets.datasetFiles import verifyEvidence, writeJson
 from futsal.inventory.catalog import hashFile, readYaml
+from futsal.training.checkpointTransfer import classificationKeys, loadAudited
 
 
 def initializeBackend(runtimeDir, numThreads):

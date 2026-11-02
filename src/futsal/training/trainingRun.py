@@ -10,12 +10,12 @@ from futsal.datasets.datasetFiles import readJson, validateNewOutput, verifyEvid
 from futsal.datasets.datasetVerify import verifyDataset
 from futsal.inventory.catalog import hashFile
 from futsal.inventory.yoloInventory import scanFiles
-from futsal.modelWeights import verifyWeights
-from futsal.report import atomicWrite
-from futsal.trainingBackend import initializeBackend, trainStage
-from futsal.trainingConfig import loadTrainingConfig
-from futsal.trainingData import copyRuntimeData, selectTrainingData
-from futsal.trainingEnvironment import inspectEnvironment
+from futsal.reporting.report import atomicWrite
+from futsal.training.modelWeights import verifyWeights
+from futsal.training.trainingBackend import initializeBackend, trainStage
+from futsal.training.trainingConfig import loadTrainingConfig
+from futsal.training.trainingData import copyRuntimeData, selectTrainingData
+from futsal.training.trainingEnvironment import inspectEnvironment
 
 
 def utcNow():

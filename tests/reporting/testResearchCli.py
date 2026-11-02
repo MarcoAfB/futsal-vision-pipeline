@@ -3,7 +3,7 @@ import pytest
 from futsal.cli import main
 from futsal.datasets.datasetFiles import readJson, writeJson
 from futsal.inventory.catalog import hashFile
-from futsal.researchCli import generateRunReport
+from futsal.reporting.researchCli import generateRunReport
 
 
 def testResearchCliNeverAcceptsTestSelection(tmp_path):
@@ -29,8 +29,8 @@ def testAutomaticReportKeepsTrainingStatusWhenResearchCannotRun(tmp_path, monkey
         calls.append(True)
         raise ValueError("fixture evaluation failure")
 
-    monkeypatch.setattr("futsal.evaluationRun.newEvaluationPath", lambda *args: output)
-    monkeypatch.setattr("futsal.evaluationRun.evaluateRun", failEvaluation)
+    monkeypatch.setattr("futsal.evaluation.evaluationRun.newEvaluationPath", lambda *args: output)
+    monkeypatch.setattr("futsal.evaluation.evaluationRun.evaluateRun", failEvaluation)
     complete, path = generateRunReport(runDir, tmp_path / "dataset", "unusedConfig")
     assert not complete and path.is_file()
     assert hashFile(runDir / "run.json") == before

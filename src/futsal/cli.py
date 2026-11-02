@@ -46,7 +46,7 @@ def main(argv: list[str] | None = None) -> int:
     trainParser.add_argument("--weights", type=Path, required=True)
     trainParser.add_argument("--outputDir", type=Path, required=True)
     trainParser.add_argument("--evaluationConfig", type=Path, default=Path("configs/evaluation/researchValidation.yaml"))
-    from futsal.researchCli import addResearchCommands
+    from futsal.reporting.researchCli import addResearchCommands
 
     addResearchCommands(commands)
     arguments = parser.parse_args(argv)
@@ -54,14 +54,14 @@ def main(argv: list[str] | None = None) -> int:
         parser.print_help()
         return 0
     if arguments.command in {"evaluateRun", "reportRun"}:
-        from futsal.researchCli import handleResearchCommand
+        from futsal.reporting.researchCli import handleResearchCommand
 
         try:
             return handleResearchCommand(arguments)
         except (OSError, ValueError, ImportError) as error:
             parser.exit(2, f"Research command could not complete: {error}\n")
     if arguments.command == "train":
-        from futsal.trainingRun import runTraining
+        from futsal.training.trainingRun import runTraining
 
         try:
             run = runTraining(arguments.datasetDir, arguments.config, arguments.weights,
@@ -69,7 +69,7 @@ def main(argv: list[str] | None = None) -> int:
         except (OSError, ValueError) as error:
             parser.exit(2, f"Training could not start: {error}\n")
         print(f"Training status: {run['status']}; record: {arguments.outputDir / 'run.json'}")
-        from futsal.researchCli import generateRunReport
+        from futsal.reporting.researchCli import generateRunReport
 
         try:
             complete, path = generateRunReport(arguments.outputDir, arguments.datasetDir, arguments.evaluationConfig)
@@ -79,7 +79,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Research report: {path}")
         return 0 if run["status"] == "completed" and complete else 1
     if arguments.command == "prepareWeights":
-        from futsal.modelWeights import prepareWeights
+        from futsal.training.modelWeights import prepareWeights
 
         try:
             metadata = prepareWeights(arguments.modelSize, arguments.outputDir)
@@ -88,7 +88,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Weights: {arguments.outputDir / metadata['filename']}\nSHA-256: {metadata['sha256']}")
         return 0
     if arguments.command == "inspectEnvironment":
-        from futsal.trainingEnvironment import inspectEnvironment, writeEnvironmentReport
+        from futsal.training.trainingEnvironment import inspectEnvironment, writeEnvironmentReport
 
         try:
             report = inspectEnvironment(arguments.device)
@@ -136,7 +136,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     from futsal.inventory.catalog import loadCatalog, resolveSourcePath
     from futsal.inventory.inventory import buildInventory
-    from futsal.report import validateOutputDirectory, writeInventory
+    from futsal.reporting.report import validateOutputDirectory, writeInventory
 
     try:
         catalog = loadCatalog(arguments.config)

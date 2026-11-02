@@ -3,9 +3,13 @@ from pathlib import Path
 
 import pytest
 
-from futsal.evaluationData import loadEvaluationConfig
-from futsal.evaluationMetrics import matchBoxes, nativeAveragePrecision, operationalMetrics
-from futsal.pointMetrics import scorePoints
+from futsal.evaluation.evaluationData import loadEvaluationConfig
+from futsal.evaluation.evaluationMetrics import (
+    matchBoxes,
+    nativeAveragePrecision,
+    operationalMetrics,
+)
+from futsal.evaluation.pointMetrics import scorePoints
 
 
 def protocol():

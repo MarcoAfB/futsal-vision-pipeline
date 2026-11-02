@@ -4,13 +4,13 @@ import pytest
 
 from futsal.datasets.datasetFiles import readJson, verifyEvidence, writeJson
 from futsal.inventory.catalog import hashFile
-from futsal.modelWeights import prepareWeights
-from futsal.trainingRun import fileEvidence, runTraining
+from futsal.training.modelWeights import prepareWeights
+from futsal.training.trainingRun import fileEvidence, runTraining
 
 
 @pytest.fixture
 def localWeights(tmp_path, monkeypatch):
-    monkeypatch.setattr("futsal.modelWeights.downloadWeights",
+    monkeypatch.setattr("futsal.training.modelWeights.downloadWeights",
                         lambda url, path: path.write_bytes(b"fixture weights"))
     directory = tmp_path / "weights"
     prepareWeights("n", directory)
@@ -19,8 +19,8 @@ def localWeights(tmp_path, monkeypatch):
 
 @pytest.fixture
 def fakeTraining(monkeypatch):
-    monkeypatch.setattr("futsal.trainingRun.inspectEnvironment", lambda device: {"ready": True})
-    monkeypatch.setattr("futsal.trainingRun.initializeBackend", lambda *arguments: None)
+    monkeypatch.setattr("futsal.training.trainingRun.inspectEnvironment", lambda device: {"ready": True})
+    monkeypatch.setattr("futsal.training.trainingRun.initializeBackend", lambda *arguments: None)
 
     def stageResult(config, task, stage, weights, stageDir, runDir, evidence):
         stageDir.mkdir(parents=True)
@@ -29,7 +29,7 @@ def fakeTraining(monkeypatch):
         return {"checkpoints": {"best": {**fileEvidence(best, runDir),
                                        "classCount": len(task["classes"])}}}
 
-    monkeypatch.setattr("futsal.trainingRun.trainStage", stageResult)
+    monkeypatch.setattr("futsal.training.trainingRun.trainStage", stageResult)
     return stageResult
 
 
@@ -64,7 +64,7 @@ def testRunPreservesFailedStageAndNeverStartsLaterStages(trainingBundle, localWe
             raise failure
         return fakeTraining(config, task, stage, weights, stageDir, runDir, evidence)
 
-    monkeypatch.setattr("futsal.trainingRun.trainStage", failSecond)
+    monkeypatch.setattr("futsal.training.trainingRun.trainStage", failSecond)
     runDir = tmp_path / "failedRun"
     result = runTraining(bundle, configPath, localWeights, runDir, progress=lambda message: None)
     assert result["status"] == ("interrupted" if isinstance(failure, KeyboardInterrupt) else "failed")
@@ -85,7 +85,7 @@ def testRuntimeMutationFailsWithoutChangingPreparedBundle(trainingBundle, localW
         (runDir / evidence[0]["path"]).write_bytes(b"backend repair")
         return result
 
-    monkeypatch.setattr("futsal.trainingRun.trainStage", mutate)
+    monkeypatch.setattr("futsal.training.trainingRun.trainStage", mutate)
     result = runTraining(bundle, configPath, localWeights, tmp_path / "mutatedRun",
                          progress=lambda message: None)
     assert result["status"] == "failed"

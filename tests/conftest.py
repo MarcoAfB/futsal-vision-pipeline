@@ -169,7 +169,7 @@ def preparedSources(tmp_path):
 def trainingBundle(preparedSources):
     from futsal.datasets.datasetExport import prepareDataset
     from futsal.datasets.datasetPlan import buildDatasetPlan, writeDatasetPlan
-    from futsal.trainingConfig import loadTrainingConfig
+    from futsal.training.trainingConfig import loadTrainingConfig
 
     dataRoot, configPath, planDir = preparedSources
     for path in dataRoot.glob("video*.xml"):

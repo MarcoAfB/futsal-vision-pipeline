@@ -1,6 +1,6 @@
 import pytest
 
-from futsal.checkpointTransfer import classificationKeys, loadAudited
+from futsal.training.checkpointTransfer import classificationKeys, loadAudited
 
 
 @pytest.mark.trainingIntegration

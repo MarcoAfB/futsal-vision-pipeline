@@ -6,8 +6,8 @@ from pathlib import Path
 
 import futsal
 from futsal.datasets.datasetFiles import hashJson, readJson, verifyEvidence, writeJson
-from futsal.evaluationBackend import predictValidation
-from futsal.evaluationData import (
+from futsal.evaluation.evaluationBackend import predictValidation
+from futsal.evaluation.evaluationData import (
     buildReferences,
     evaluationTasks,
     loadEvaluationConfig,
@@ -15,15 +15,15 @@ from futsal.evaluationData import (
     validateResearchOutput,
     writeJsonLines,
 )
-from futsal.evaluationMetrics import scoreDetections
+from futsal.evaluation.evaluationMetrics import scoreDetections
+from futsal.evaluation.pointMetrics import scorePoints
 from futsal.inventory.catalog import hashFile, resolveSourcePath
-from futsal.pointMetrics import scorePoints
-from futsal.report import atomicWrite
-from futsal.researchExamples import fixedExamples, selectExamples
-from futsal.trainingBackend import initializeBackend
-from futsal.trainingData import copyRuntimeData
-from futsal.trainingEnvironment import packageVersions
-from futsal.trainingRun import fileEvidence, snapshotCode, utcNow, verifyBundleUnchanged
+from futsal.reporting.report import atomicWrite
+from futsal.reporting.researchExamples import fixedExamples, selectExamples
+from futsal.training.trainingBackend import initializeBackend
+from futsal.training.trainingData import copyRuntimeData
+from futsal.training.trainingEnvironment import packageVersions
+from futsal.training.trainingRun import fileEvidence, snapshotCode, utcNow, verifyBundleUnchanged
 
 
 def saveEvaluation(outputDir, state):

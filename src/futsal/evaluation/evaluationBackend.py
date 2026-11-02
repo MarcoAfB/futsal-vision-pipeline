@@ -2,7 +2,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from futsal.datasets.datasetFiles import writeJson
-from futsal.trainingBackend import verifyLoader
+from futsal.training.trainingBackend import verifyLoader
 
 
 def predictValidation(checkpoint, task, references, stage, trainingConfig, config, workDir):

@@ -5,7 +5,7 @@ import yaml
 
 from futsal.cli import main
 from futsal.inventory.catalog import hashFile
-from futsal.report import validateOutputDirectory
+from futsal.reporting.report import validateOutputDirectory
 
 
 def testCliWritesDeterministicReportsWithoutChangingSources(smallDataset, capsys):

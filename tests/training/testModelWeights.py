@@ -1,6 +1,6 @@
 import pytest
 
-from futsal.modelWeights import prepareWeights, verifyWeights
+from futsal.training.modelWeights import prepareWeights, verifyWeights
 
 
 def testOfficialDownloadsHaveExplicitProvenanceAndCannotBeReplaced(tmp_path, monkeypatch):
@@ -10,7 +10,7 @@ def testOfficialDownloadsHaveExplicitProvenanceAndCannotBeReplaced(tmp_path, mon
         urls.append(url)
         path.write_bytes(b"test checkpoint")
 
-    monkeypatch.setattr("futsal.modelWeights.downloadWeights", download)
+    monkeypatch.setattr("futsal.training.modelWeights.downloadWeights", download)
     output = tmp_path / "weights"
     metadata = prepareWeights("n", output)
     path = output / "yolo26n.pt"
@@ -30,7 +30,7 @@ def testInterruptedDownloadsDoNotPublishWeights(tmp_path, monkeypatch):
         path.write_bytes(b"partial")
         raise OSError("interrupted download")
 
-    monkeypatch.setattr("futsal.modelWeights.downloadWeights", interrupted)
+    monkeypatch.setattr("futsal.training.modelWeights.downloadWeights", interrupted)
     output = tmp_path / "weights"
     with pytest.raises(OSError, match="interrupted"):
         prepareWeights("n", output)

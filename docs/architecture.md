@@ -1,0 +1,71 @@
+# Package architecture
+
+`src` is the source directory; `futsal` is the installable Python package. Hatch
+includes `src/futsal` and its subpackages in the wheel. The package name remains
+stable for `python -m futsal`, the installed `futsal` command and explicit imports.
+
+Only `__init__.py`, `__main__.py` and `cli.py` remain at the package root.
+`__init__.py` declares the version, `__main__.py` delegates module execution, and
+`cli.py` parses commands and dispatches workflows. Domain initializers are empty;
+importing a subpackage does not eagerly load its workflows or optional backends.
+
+## Responsibilities
+
+| Subpackage | Responsibility | Modules |
+| --- | --- | --- |
+| `annotations` | Read annotation formats, audit source geometry and convert detection targets. | `cvatReader`, `yoloAnnotations`, `annotationAudit`, `detectionGeometry` |
+| `inventory` | Register sources, inspect media and audit reviewed own/public records. | `catalog`, `mediaMetadata`, `inventory`, `ownInventory`, `yoloInventory` |
+| `datasets` | Apply recipes and quarantine, freeze match splits, extract eligible frames, export and verify derived datasets. | `recipes`, `matchSplits`, `datasetSamples`, `datasetPlan`, `datasetExport`, `datasetVerify`, `datasetFiles`, `frameExtraction`, `reviewImages` |
+| `training` | Inspect the environment, prepare weights, select development data, audit transfer and orchestrate native training. | `trainingEnvironment`, `modelWeights`, `trainingConfig`, `trainingData`, `checkpointTransfer`, `trainingBackend`, `trainingRun` |
+| `evaluation` | Validate selections and predictions, run archived checkpoints and calculate detection/native-point metrics. | `evaluationData`, `evaluationBackend`, `evaluationMetrics`, `pointMetrics`, `evaluationRun` |
+| `reporting` | Render inventory/research reports, select examples, produce figures and coordinate research CLI processing. | `report`, `researchExamples`, `reportExamples`, `researchFigures`, `researchReport`, `researchCli` |
+
+Keep additions in the subpackage that owns their behavior. Format readers belong
+in `annotations`; dataset eligibility and export policy belong in `datasets`;
+research measurement belongs in `evaluation`; presentation belongs in `reporting`.
+`reviewImages` stays with dataset quarantine because it visualizes preparation
+findings. Research example selection stays with reporting even though evaluation
+archives the chosen source images as portable presentation evidence.
+
+## Imports and dependencies
+
+Use explicit module paths, for example:
+
+```python
+from futsal.annotations.cvatReader import readCvat
+from futsal.datasets.datasetPlan import buildDatasetPlan
+from futsal.training.trainingRun import runTraining
+from futsal.evaluation.evaluationRun import evaluateRun
+from futsal.reporting.researchReport import renderReport
+```
+
+These groups organize existing responsibilities rather than impose independent
+layers. Cross-domain imports remain explicit. Shared file/evidence helpers stay
+in `datasets.datasetFiles`, source-path/hash helpers in `inventory.catalog`, and
+Markdown/atomic-write helpers in `reporting.report`. Those modules do not load a
+model or plotting backend. Backend imports remain deferred until their operations
+are requested; inventory and dataset commands do not require the training extra,
+and evidence-only rendering does not require model packages.
+
+The former flat internal imports, such as `futsal.trainingRun`, are replaced by
+their domain paths. There are no forwarding modules or broad initializer exports.
+CLI names, arguments, exit statuses, configuration, dataset/evaluation formats and
+research metric definitions are unchanged.
+
+## Tests and archived source
+
+`tests` mirrors the six domain directories. Shared fixtures remain in the root
+`tests/conftest.py`; general CLI tests remain in `tests/testCli.py`. The existing
+test markers and default collection rules still apply. Run a domain explicitly
+with, for example, `uv run pytest tests/datasets`.
+
+Training and evaluation snapshots copy the complete source tree with relative
+paths. Renderer snapshots likewise preserve every nested module and subpackage
+initializer under `presentation/src/futsal`, retaining distinct files with the
+same basename. Project-relative runtime paths are anchored to the top-level
+package rather than the depth of the calling module.
+
+Existing run/evaluation archives keep their original code snapshots and hashes.
+Regeneration reads sealed evidence and writes a new presentation directory; it
+does not migrate or rewrite historical archives. See [evaluation](evaluation.md)
+for evidence contracts and [training](training.md) for execution provenance.

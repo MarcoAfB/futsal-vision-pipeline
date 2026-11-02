@@ -108,8 +108,24 @@ camelCase; classes use PascalCase. Tool-required filenames and external APIs ret
 their required spelling. Original data filenames and labels are preserved.
 
 Source code lives in `src/futsal`, configuration in `configs`, tests in `tests`, and
-technical documentation in `docs`. Experimental variants will use configuration files
-and a shared implementation. Commits describe coherent changes with their validation.
+technical documentation in `docs`. Source and tests are grouped by responsibility:
+
+```text
+src/futsal/
+  __init__.py
+  __main__.py
+  cli.py
+  annotations/
+  inventory/
+  datasets/
+  training/
+  evaluation/
+  reporting/
+```
+
+See [package architecture](docs/architecture.md) for module locations, dependencies
+and source archiving. Experimental variants use configuration files and a shared
+implementation. Commits describe coherent changes with their validation.
 
 Datasets, model weights, environments, and generated results are excluded from Git.
 The legacy source data must remain unchanged. Source licensing is independent of this

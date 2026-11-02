@@ -5,7 +5,7 @@ import pytest
 
 import futsal
 from futsal.datasets.datasetFiles import hashJson, readJson, writeJson
-from futsal.evaluationData import (
+from futsal.evaluation.evaluationData import (
     buildReferences,
     evaluationTasks,
     loadEvaluationConfig,
@@ -13,7 +13,7 @@ from futsal.evaluationData import (
     validateResearchOutput,
 )
 from futsal.inventory.catalog import hashFile
-from futsal.trainingData import selectTrainingData
+from futsal.training.trainingData import selectTrainingData
 
 
 @pytest.mark.parametrize("directory", ["src", "configs", "../Python"])

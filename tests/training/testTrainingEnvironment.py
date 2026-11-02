@@ -1,11 +1,11 @@
 import pytest
 
-from futsal.trainingEnvironment import inspectEnvironment, writeEnvironmentReport
+from futsal.training.trainingEnvironment import inspectEnvironment, writeEnvironmentReport
 
 
 def testMissingTrainingPackagesStillProduceAUsefulReport(tmp_path, monkeypatch):
-    monkeypatch.setattr("futsal.trainingEnvironment.packageVersions", lambda: {"torch": None})
-    monkeypatch.setattr("futsal.trainingEnvironment.shutil.which", lambda name: None)
+    monkeypatch.setattr("futsal.training.trainingEnvironment.packageVersions", lambda: {"torch": None})
+    monkeypatch.setattr("futsal.training.trainingEnvironment.shutil.which", lambda name: None)
     report = inspectEnvironment()
     assert report["ready"] is False
     assert "training extra" in report["findings"][0]

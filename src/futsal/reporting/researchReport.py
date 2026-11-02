@@ -10,12 +10,12 @@ from pathlib import Path
 
 import futsal
 from futsal.datasets.datasetFiles import hashJson, readJson, verifyEvidence, writeJson
-from futsal.evaluationData import readJsonLines, validateResearchOutput
+from futsal.evaluation.evaluationData import readJsonLines, validateResearchOutput
 from futsal.inventory.catalog import hashFile, resolveSourcePath
-from futsal.report import atomicWrite, markdownCell
-from futsal.reportExamples import renderExamples
-from futsal.researchFigures import stageFigures
-from futsal.trainingRun import fileEvidence, utcNow
+from futsal.reporting.report import atomicWrite, markdownCell
+from futsal.reporting.reportExamples import renderExamples
+from futsal.reporting.researchFigures import stageFigures
+from futsal.training.trainingRun import fileEvidence, utcNow
 
 
 def number(value):

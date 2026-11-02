@@ -3,8 +3,8 @@ from pathlib import Path
 import pytest
 
 from futsal.datasets.datasetFiles import readJson, verifyEvidence
-from futsal.trainingConfig import loadTrainingConfig
-from futsal.trainingData import copyRuntimeData, selectRows, selectTrainingData
+from futsal.training.trainingConfig import loadTrainingConfig
+from futsal.training.trainingData import copyRuntimeData, selectRows, selectTrainingData
 
 
 def testSharedSelectionCopiesBytesWithoutReservedTestOrLinks(trainingBundle, tmp_path):

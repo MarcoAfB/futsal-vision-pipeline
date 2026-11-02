@@ -3,8 +3,8 @@ from types import SimpleNamespace
 import pytest
 
 from futsal.datasets.datasetFiles import readJson
-from futsal.trainingBackend import initializeBackend, validationMetrics, verifyLoader
-from futsal.trainingData import copyRuntimeData, selectTrainingData
+from futsal.training.trainingBackend import initializeBackend, validationMetrics, verifyLoader
+from futsal.training.trainingData import copyRuntimeData, selectTrainingData
 
 
 def testUnsupportedMetricsAreNullEvenWhenBackendFillsAggregate():
@@ -34,8 +34,8 @@ def testLoaderRejectsSilentAnnotationDrops(trainingBundle, tmp_path):
 @pytest.mark.trainingIntegration
 def testNativeCpuStagesProduceTwoThreeAndTwentyFiveClassCheckpoints(trainingBundle, tmp_path,
                                                                   monkeypatch):
-    from futsal.modelWeights import prepareWeights
-    from futsal.trainingRun import runTraining
+    from futsal.training.modelWeights import prepareWeights
+    from futsal.training.trainingRun import runTraining
 
     bundle, configFile, config = trainingBundle
     runDir = tmp_path / "nativeRun"
@@ -69,7 +69,7 @@ def testNativeCpuStagesProduceTwoThreeAndTwentyFiveClassCheckpoints(trainingBund
     def fixtureDownload(url, destination):
         torch.save({"model": DetectionModel("yolo26n.yaml", nc=80, verbose=False)}, destination)
 
-    monkeypatch.setattr("futsal.modelWeights.downloadWeights", fixtureDownload)
+    monkeypatch.setattr("futsal.training.modelWeights.downloadWeights", fixtureDownload)
     prepareWeights("n", tmp_path / "initial")
     run = runTraining(bundle, configFile, tmp_path / "initial" / "yolo26n.pt", runDir)
     assert run["status"] == "completed", run.get("error")
@@ -83,7 +83,7 @@ def testNativeCpuStagesProduceTwoThreeAndTwentyFiveClassCheckpoints(trainingBund
         assert readJson(stageDir / "optimizer.json")["initialStateEntries"] == 0
     assert result["perClass"]["lowerCornerSideB"]["ap50"] is None
     assert networkCalls == []
-    from futsal.evaluationRun import evaluateRun
+    from futsal.evaluation.evaluationRun import evaluateRun
 
     evaluationDir = tmp_path / "researchEvaluation"
     evaluation = evaluateRun(runDir, bundle, "configs/evaluation/researchValidation.yaml",

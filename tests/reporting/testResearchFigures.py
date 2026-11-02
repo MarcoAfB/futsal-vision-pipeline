@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from futsal.evaluationData import loadEvaluationConfig
-from futsal.researchFigures import stageFigures
+from futsal.evaluation.evaluationData import loadEvaluationConfig
+from futsal.reporting.researchFigures import stageFigures
 
 
 @pytest.mark.reportingIntegration

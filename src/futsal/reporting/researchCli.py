@@ -19,8 +19,8 @@ def addResearchCommands(commands):
 
 
 def handleResearchCommand(arguments):
-    from futsal.evaluationRun import evaluateRun
-    from futsal.researchReport import renderReport, renderTrainingReport
+    from futsal.evaluation.evaluationRun import evaluateRun
+    from futsal.reporting.researchReport import renderReport, renderTrainingReport
 
     if arguments.command == "reportRun":
         path = (renderReport(arguments.evaluationDir, arguments.outputDir) if arguments.evaluationDir else
@@ -36,10 +36,14 @@ def handleResearchCommand(arguments):
 
 
 def generateRunReport(runDir, datasetDir, configPath):
-    from futsal.evaluationData import validateResearchOutput
-    from futsal.evaluationRun import evaluateRun, newEvaluationPath
-    from futsal.researchReport import renderReport, renderTrainingReport, updateReportIndex
-    from futsal.trainingRun import utcNow
+    from futsal.evaluation.evaluationData import validateResearchOutput
+    from futsal.evaluation.evaluationRun import evaluateRun, newEvaluationPath
+    from futsal.reporting.researchReport import (
+        renderReport,
+        renderTrainingReport,
+        updateReportIndex,
+    )
+    from futsal.training.trainingRun import utcNow
 
     runDir = Path(runDir).resolve()
     run = readJson(runDir / "run.json")

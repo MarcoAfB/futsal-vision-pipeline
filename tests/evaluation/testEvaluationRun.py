@@ -5,20 +5,20 @@ from pathlib import Path
 import pytest
 
 from futsal.datasets.datasetFiles import readJson
-from futsal.evaluationRun import evaluateRun
+from futsal.evaluation.evaluationRun import evaluateRun
 from futsal.inventory.catalog import hashFile
-from futsal.modelWeights import prepareWeights
-from futsal.trainingRun import fileEvidence, runTraining
+from futsal.training.modelWeights import prepareWeights
+from futsal.training.trainingRun import fileEvidence, runTraining
 
 
 @pytest.fixture
 def evaluationRunFixture(trainingBundle, tmp_path, monkeypatch):
     bundle, configPath, _ = trainingBundle
-    monkeypatch.setattr("futsal.modelWeights.downloadWeights", lambda url, path: path.write_bytes(b"fixture weights"))
+    monkeypatch.setattr("futsal.training.modelWeights.downloadWeights", lambda url, path: path.write_bytes(b"fixture weights"))
     weights = tmp_path / "weights"
     prepareWeights("n", weights)
-    monkeypatch.setattr("futsal.trainingRun.inspectEnvironment", lambda device: {"ready": True})
-    monkeypatch.setattr("futsal.trainingRun.initializeBackend", lambda *args: None)
+    monkeypatch.setattr("futsal.training.trainingRun.inspectEnvironment", lambda device: {"ready": True})
+    monkeypatch.setattr("futsal.training.trainingRun.initializeBackend", lambda *args: None)
 
     def train(config, task, stage, source, stageDir, runDir, evidence):
         stageDir.mkdir(parents=True)
@@ -27,11 +27,11 @@ def evaluationRunFixture(trainingBundle, tmp_path, monkeypatch):
         return {"losses": {"fixtureLoss": 0.0}, "checkpoints": {"best": fileEvidence(best, runDir)
                 | {"classCount": len(task["classes"]), "names": task["classes"]}}}
 
-    monkeypatch.setattr("futsal.trainingRun.trainStage", train)
+    monkeypatch.setattr("futsal.training.trainingRun.trainStage", train)
     runDir = tmp_path / "run"
     run = runTraining(bundle, configPath, weights / "yolo26n.pt", runDir, progress=lambda message: None)
     assert run["status"] == "completed"
-    monkeypatch.setattr("futsal.evaluationRun.initializeBackend", lambda *args: None)
+    monkeypatch.setattr("futsal.evaluation.evaluationRun.initializeBackend", lambda *args: None)
 
     def predictions(checkpoint, task, references, stage, trainingConfig, config, workDir):
         return ([{"recordId": row["recordId"], "dimensions": row["dimensions"], "detections": []}
@@ -43,8 +43,8 @@ def evaluationRunFixture(trainingBundle, tmp_path, monkeypatch):
                                      "ap50To95": 0.0 if counts[index] else None}
                               for index, name in enumerate(names)}, "prCurves": {}, "matches": []}
 
-    monkeypatch.setattr("futsal.evaluationRun.predictValidation", predictions)
-    monkeypatch.setattr("futsal.evaluationMetrics.nativeAveragePrecision", noDetectionAp)
+    monkeypatch.setattr("futsal.evaluation.evaluationRun.predictValidation", predictions)
+    monkeypatch.setattr("futsal.evaluation.evaluationMetrics.nativeAveragePrecision", noDetectionAp)
     return bundle, runDir, predictions
 
 
@@ -75,7 +75,7 @@ def testBackendMutationRetainsFailureAndStopsLaterEvaluationStages(evaluationRun
         first.write_bytes(b"unexpected backend repair")
         return original(checkpoint, task, references, stage, trainingConfig, config, workDir)
 
-    monkeypatch.setattr("futsal.evaluationRun.predictValidation", mutate)
+    monkeypatch.setattr("futsal.evaluation.evaluationRun.predictValidation", mutate)
     output = tmp_path / "failedEvaluation"
     state = evaluateRun(runDir, bundle, "configs/evaluation/researchValidation.yaml", "runValidation", output,
                         progress=lambda message: None)

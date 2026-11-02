@@ -5,14 +5,14 @@ from pathlib import Path
 import pytest
 
 import futsal
-from futsal import researchReport
 from futsal.datasets.datasetFiles import readJson, verifyEvidence, writeJson
-from futsal.evaluationData import buildReferences, loadEvaluationConfig, writeJsonLines
-from futsal.evaluationMetrics import aggregateGroups, operationalMetrics
-from futsal.evaluationRun import sealEvaluation
-from futsal.pointMetrics import scorePoints
-from futsal.researchExamples import fixedExamples, selectExamples
-from futsal.researchReport import (
+from futsal.evaluation.evaluationData import buildReferences, loadEvaluationConfig, writeJsonLines
+from futsal.evaluation.evaluationMetrics import aggregateGroups, operationalMetrics
+from futsal.evaluation.evaluationRun import sealEvaluation
+from futsal.evaluation.pointMetrics import scorePoints
+from futsal.reporting import researchReport
+from futsal.reporting.researchExamples import fixedExamples, selectExamples
+from futsal.reporting.researchReport import (
     archiveRenderer,
     renderReport,
     renderTrainingReport,

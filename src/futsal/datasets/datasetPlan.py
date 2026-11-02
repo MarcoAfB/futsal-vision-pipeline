@@ -23,7 +23,7 @@ from futsal.datasets.matchSplits import (
 from futsal.datasets.recipes import Recipe, loadRecipe, validateRecipe
 from futsal.inventory.catalog import Catalog, readYaml, requireUnique, resolveSourcePath
 from futsal.inventory.inventory import buildInventory
-from futsal.report import renderTable
+from futsal.reporting.report import renderTable
 
 
 def planRecipe(plan):
