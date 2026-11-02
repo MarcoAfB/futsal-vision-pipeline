@@ -9,9 +9,9 @@ from importlib.metadata import version
 from pathlib import Path
 
 import futsal
-from futsal.catalog import hashFile, resolveSourcePath
-from futsal.datasetFiles import hashJson, readJson, verifyEvidence, writeJson
+from futsal.datasets.datasetFiles import hashJson, readJson, verifyEvidence, writeJson
 from futsal.evaluationData import readJsonLines, validateResearchOutput
+from futsal.inventory.catalog import hashFile, resolveSourcePath
 from futsal.report import atomicWrite, markdownCell
 from futsal.reportExamples import renderExamples
 from futsal.researchFigures import stageFigures

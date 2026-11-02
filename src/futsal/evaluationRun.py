@@ -5,8 +5,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import futsal
-from futsal.catalog import hashFile, resolveSourcePath
-from futsal.datasetFiles import hashJson, readJson, verifyEvidence, writeJson
+from futsal.datasets.datasetFiles import hashJson, readJson, verifyEvidence, writeJson
 from futsal.evaluationBackend import predictValidation
 from futsal.evaluationData import (
     buildReferences,
@@ -17,6 +16,7 @@ from futsal.evaluationData import (
     writeJsonLines,
 )
 from futsal.evaluationMetrics import scoreDetections
+from futsal.inventory.catalog import hashFile, resolveSourcePath
 from futsal.pointMetrics import scorePoints
 from futsal.report import atomicWrite
 from futsal.researchExamples import fixedExamples, selectExamples

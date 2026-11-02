@@ -89,7 +89,7 @@ def smallDataset(tmp_path, monkeypatch):
             "metadataProvider": "testFixture",
         }
 
-    monkeypatch.setattr("futsal.ownInventory.readVideoMetadata", videoProbe)
+    monkeypatch.setattr("futsal.inventory.ownInventory.readVideoMetadata", videoProbe)
     return dataRoot, configPath, tmp_path / "results"
 
 
@@ -167,8 +167,8 @@ def preparedSources(tmp_path):
 
 @pytest.fixture
 def trainingBundle(preparedSources):
-    from futsal.datasetExport import prepareDataset
-    from futsal.datasetPlan import buildDatasetPlan, writeDatasetPlan
+    from futsal.datasets.datasetExport import prepareDataset
+    from futsal.datasets.datasetPlan import buildDatasetPlan, writeDatasetPlan
     from futsal.trainingConfig import loadTrainingConfig
 
     dataRoot, configPath, planDir = preparedSources

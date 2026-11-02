@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from futsal.datasetFiles import readJson
+from futsal.datasets.datasetFiles import readJson
 from futsal.trainingBackend import initializeBackend, validationMetrics, verifyLoader
 from futsal.trainingData import copyRuntimeData, selectTrainingData
 

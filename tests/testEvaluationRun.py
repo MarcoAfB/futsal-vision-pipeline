@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from futsal.catalog import hashFile
-from futsal.datasetFiles import readJson
+from futsal.datasets.datasetFiles import readJson
 from futsal.evaluationRun import evaluateRun
+from futsal.inventory.catalog import hashFile
 from futsal.modelWeights import prepareWeights
 from futsal.trainingRun import fileEvidence, runTraining
 

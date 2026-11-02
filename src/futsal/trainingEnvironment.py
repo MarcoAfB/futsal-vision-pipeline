@@ -6,7 +6,7 @@ import subprocess
 from pathlib import Path
 
 import futsal
-from futsal.datasetFiles import stagedDirectory, writeJson
+from futsal.datasets.datasetFiles import stagedDirectory, writeJson
 
 
 def packageVersions():

@@ -1,8 +1,8 @@
 import pytest
 
-from futsal.catalog import hashFile
 from futsal.cli import main
-from futsal.datasetFiles import readJson, writeJson
+from futsal.datasets.datasetFiles import readJson, writeJson
+from futsal.inventory.catalog import hashFile
 from futsal.researchCli import generateRunReport
 
 

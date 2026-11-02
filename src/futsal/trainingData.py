@@ -5,9 +5,9 @@ from pathlib import Path
 
 import yaml
 
-from futsal.catalog import hashFile, resolveSourcePath
-from futsal.datasetFiles import readJson, verifyEvidence, writeJson
-from futsal.recipes import activeTasks
+from futsal.datasets.datasetFiles import readJson, verifyEvidence, writeJson
+from futsal.datasets.recipes import activeTasks
+from futsal.inventory.catalog import hashFile, resolveSourcePath
 
 
 def classSupport(rows, names):

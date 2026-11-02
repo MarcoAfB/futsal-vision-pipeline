@@ -4,8 +4,7 @@ from pathlib import Path
 import pytest
 
 import futsal
-from futsal.catalog import hashFile
-from futsal.datasetFiles import hashJson, readJson, writeJson
+from futsal.datasets.datasetFiles import hashJson, readJson, writeJson
 from futsal.evaluationData import (
     buildReferences,
     evaluationTasks,
@@ -13,6 +12,7 @@ from futsal.evaluationData import (
     validatePredictions,
     validateResearchOutput,
 )
+from futsal.inventory.catalog import hashFile
 from futsal.trainingData import selectTrainingData
 
 

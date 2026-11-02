@@ -2,8 +2,8 @@ import shutil
 
 import pytest
 
-from futsal.catalog import hashFile
-from futsal.datasetFiles import readJson, verifyEvidence, writeJson
+from futsal.datasets.datasetFiles import readJson, verifyEvidence, writeJson
+from futsal.inventory.catalog import hashFile
 from futsal.modelWeights import prepareWeights
 from futsal.trainingRun import fileEvidence, runTraining
 

@@ -1,7 +1,7 @@
 import traceback
 from pathlib import Path
 
-from futsal.datasetFiles import readJson, writeJson
+from futsal.datasets.datasetFiles import readJson, writeJson
 
 
 def addResearchCommands(commands):

@@ -6,16 +6,16 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import futsal
-from futsal.catalog import hashFile
-from futsal.datasetFiles import readJson, validateNewOutput, verifyEvidence, writeJson
-from futsal.datasetVerify import verifyDataset
+from futsal.datasets.datasetFiles import readJson, validateNewOutput, verifyEvidence, writeJson
+from futsal.datasets.datasetVerify import verifyDataset
+from futsal.inventory.catalog import hashFile
+from futsal.inventory.yoloInventory import scanFiles
 from futsal.modelWeights import verifyWeights
 from futsal.report import atomicWrite
 from futsal.trainingBackend import initializeBackend, trainStage
 from futsal.trainingConfig import loadTrainingConfig
 from futsal.trainingData import copyRuntimeData, selectTrainingData
 from futsal.trainingEnvironment import inspectEnvironment
-from futsal.yoloInventory import scanFiles
 
 
 def utcNow():

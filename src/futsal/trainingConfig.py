@@ -1,7 +1,7 @@
 import math
 
-from futsal.catalog import readYaml
-from futsal.recipes import activeTasks
+from futsal.datasets.recipes import activeTasks
+from futsal.inventory.catalog import readYaml
 
 
 def loadTrainingConfig(path, recipe):

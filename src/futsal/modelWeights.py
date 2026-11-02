@@ -3,8 +3,8 @@ import urllib.request
 from pathlib import Path
 
 import futsal
-from futsal.catalog import hashFile
-from futsal.datasetFiles import readJson, stagedDirectory, writeJson
+from futsal.datasets.datasetFiles import readJson, stagedDirectory, writeJson
+from futsal.inventory.catalog import hashFile
 
 
 def downloadWeights(url, destination):

@@ -1,5 +1,10 @@
 # Curriculum dataset preparation
 
+Source annotation readers and geometry conversion live in `futsal.annotations`;
+catalogue and source audits in `futsal.inventory`; planning, splits, quarantine,
+export and verification in `futsal.datasets`. The CLI commands and generated
+dataset formats are unchanged. Tests use the corresponding domain directories.
+
 The first experiment targets one detector with 25 classes: ball, four athlete
 classes, and twenty fixed court landmarks. Data preparation follows three tasks:
 

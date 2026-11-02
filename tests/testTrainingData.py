@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from futsal.datasetFiles import readJson, verifyEvidence
+from futsal.datasets.datasetFiles import readJson, verifyEvidence
 from futsal.trainingConfig import loadTrainingConfig
 from futsal.trainingData import copyRuntimeData, selectRows, selectTrainingData
 

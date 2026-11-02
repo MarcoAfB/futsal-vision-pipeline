@@ -98,7 +98,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Training environment ready: {report['ready']}; report: {arguments.outputDir}")
         return 0 if report["ready"] else 1
     if arguments.command == "verifyDataset":
-        from futsal.datasetVerify import verifyDataset
+        from futsal.datasets.datasetVerify import verifyDataset
 
         try:
             result = verifyDataset(arguments.datasetDir,
@@ -110,8 +110,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Contract: {result['contractId']}")
         return 0
     if arguments.command == "planDataset":
-        from futsal.datasetFiles import validateNewOutput
-        from futsal.datasetPlan import buildDatasetPlan, writeDatasetPlan
+        from futsal.datasets.datasetFiles import validateNewOutput
+        from futsal.datasets.datasetPlan import buildDatasetPlan, writeDatasetPlan
 
         try:
             validateNewOutput(arguments.outputDir, arguments.dataRoot, [arguments.config])
@@ -125,7 +125,7 @@ def main(argv: list[str] | None = None) -> int:
     if arguments.command == "prepareDataset":
         import cv2
 
-        from futsal.datasetExport import prepareDataset
+        from futsal.datasets.datasetExport import prepareDataset
 
         try:
             contract = prepareDataset(arguments.plan, arguments.dataRoot, arguments.outputDir,
@@ -134,8 +134,8 @@ def main(argv: list[str] | None = None) -> int:
             parser.exit(2, f"Dataset preparation could not be completed: {error}\n")
         print(f"Dataset: {arguments.outputDir}\nContract: {contract['contractId']}")
         return 0
-    from futsal.catalog import loadCatalog, resolveSourcePath
-    from futsal.inventory import buildInventory
+    from futsal.inventory.catalog import loadCatalog, resolveSourcePath
+    from futsal.inventory.inventory import buildInventory
     from futsal.report import validateOutputDirectory, writeInventory
 
     try:

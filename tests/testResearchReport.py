@@ -6,7 +6,7 @@ import pytest
 
 import futsal
 from futsal import researchReport
-from futsal.datasetFiles import readJson, verifyEvidence, writeJson
+from futsal.datasets.datasetFiles import readJson, verifyEvidence, writeJson
 from futsal.evaluationData import buildReferences, loadEvaluationConfig, writeJsonLines
 from futsal.evaluationMetrics import aggregateGroups, operationalMetrics
 from futsal.evaluationRun import sealEvaluation

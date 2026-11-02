@@ -3,9 +3,9 @@ import math
 from pathlib import Path
 
 import futsal
-from futsal.catalog import hashFile, readYaml
-from futsal.datasetFiles import readJson, validateNewOutput
-from futsal.recipes import activeTasks
+from futsal.datasets.datasetFiles import readJson, validateNewOutput
+from futsal.datasets.recipes import activeTasks
+from futsal.inventory.catalog import hashFile, readYaml
 
 
 def validateResearchOutput(outputDir, inputRoots, protectedPaths=()):

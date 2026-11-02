@@ -1,7 +1,7 @@
 from pathlib import Path
 from types import SimpleNamespace
 
-from futsal.datasetFiles import writeJson
+from futsal.datasets.datasetFiles import writeJson
 from futsal.trainingBackend import verifyLoader
 
 
