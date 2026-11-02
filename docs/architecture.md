@@ -69,3 +69,26 @@ Existing run/evaluation archives keep their original code snapshots and hashes.
 Regeneration reads sealed evidence and writes a new presentation directory; it
 does not migrate or rewrite historical archives. See [evaluation](evaluation.md)
 for evidence contracts and [training](training.md) for execution provenance.
+
+## Restructuring verification
+
+On 2026-11-02, Ruff, all 164 regular tests and all five optional integration tests
+passed with this structure. After the path/archive preparation change, the 39
+existing module bodies remained equivalent when imports were excluded from the
+comparison. Six empty package initializers were added.
+
+The wheel contained all 45 package Python files. An isolated installation outside
+the repository imported all 44 discovered submodules, exercised the help commands
+for all nine CLI workflows and checked the installed entry point. That environment
+used only locally copied base dependencies; model and plotting packages were absent.
+No dependency download was needed.
+
+An existing sealed real evaluation was regenerated through `reportRun` into
+`outputs/verification/packageLayout/reportReplay`. Evidence contracts, source
+presentation artifacts and training metadata retained their hashes; detection
+tables remained byte-identical for all three stages. The new renderer snapshot
+preserved all 45 source files with their subdirectories and hashes. Local check
+summaries are `outputs/verification/packageLayout/installedPackage.json` and
+`outputs/verification/packageLayout/reportCompatibility.json`. The compatibility
+check used archived validation evidence; original data and reserved test data were
+not changed or newly evaluated.
