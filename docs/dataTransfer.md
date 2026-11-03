@@ -50,3 +50,28 @@ include raw legacy data, source videos, code, weights or experiments. Transfer
 code through Git (or an offline Git bundle) and the official initial weights with
 their provenance sidecar independently. Generated archives, receipts, scientific
 data and machine settings belong under ignored data/outputs or local settings.
+
+## Returning results
+
+Package each finished attempt separately. Repeat `--reportDir` for additional
+sealed evaluations/presentations, and optionally include its launcher logs:
+
+```text
+python3.12 scripts/resultTransfer.py pack --runDir runs/seed42 --reportDir reports/seed42/<evaluation> --launchDir launches/seed42 --archive outgoing/seed42.tar.gz --receipt outgoing/seed42.receipt.json
+python scripts/resultTransfer.py check --archive incoming/seed42.tar.gz --receipt incoming/seed42.receipt.json
+python scripts/resultTransfer.py unpack --archive incoming/seed42.tar.gz --receipt incoming/seed42.receipt.json --outputDir outputs/imported/seed42
+```
+
+The new import contains `run/`, numbered `reports/report01/` folders and optional
+`launch/`. Its receipt maps report folder names to the original names. Included
+run inputs/code, best/last checkpoints, stage audits, losses, metrics and logs
+are hashed. Evaluation seals and presentation artifact hashes are checked before
+packing and after extraction; a report bound to different run metadata is refused.
+Training metadata and server absolute paths are preserved byte for byte.
+
+`runtimeData`, backend caches and evaluationWork are excluded explicitly.
+`runtimeEvidence.json` records their original provenance; import does not claim
+verification of omitted bytes. The original server attempt stays intact. A sealed
+report can be regenerated with `reportRun --evaluationDir <import>/reports/report01
+--outputDir <newPresentation>` without inference. A new evaluation reconstructs
+runtime copies from the matching prepared bundle and saved selection.
