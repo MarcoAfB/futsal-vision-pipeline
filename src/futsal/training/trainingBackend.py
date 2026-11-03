@@ -2,11 +2,13 @@ import json
 import logging
 import math
 import os
+import time
 from pathlib import Path
 
 from futsal.datasets.datasetFiles import verifyEvidence, writeJson
 from futsal.inventory.catalog import hashFile, readYaml
 from futsal.training.checkpointTransfer import classificationKeys, loadAudited
+from futsal.training.trainingConfig import stageParameters
 
 
 def initializeBackend(runtimeDir, numThreads):
@@ -18,6 +20,7 @@ def initializeBackend(runtimeDir, numThreads):
         os.environ[name] = str(path)
     os.environ["YOLO_OFFLINE"] = "true"
     os.environ["YOLO_AUTOINSTALL"] = "false"
+    os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
     import torch
     from ultralytics import settings
 
@@ -51,7 +54,7 @@ def verifyLoader(dataset, task, split, runDir):
     return {"imageCount": len(actual), "annotationsVerified": True}
 
 
-def validationMetrics(metrics, names, support):
+def validationMetrics(metrics, names, support, purpose="technicalSmoke"):
     indices = {int(classId): index for index, classId in enumerate(metrics.ap_class_index)}
     perClass = {}
     for classId, name in enumerate(names):
@@ -65,7 +68,8 @@ def validationMetrics(metrics, names, support):
         for key, value in item.items() if key not in {"support", "supported"}
     ):
         raise ValueError("Validation returned nonfinite metrics.")
-    return {"interpretation": "technicalSmokeOnly", "aggregate": aggregate, "perClass": perClass}
+    return {"interpretation": "technicalSmokeOnly" if purpose == "technicalSmoke" else purpose,
+            "aggregate": aggregate, "perClass": perClass}
 
 
 def trainStage(config, task, stage, inputWeights, stageDir, runDir, runtimeEvidence):
@@ -132,13 +136,15 @@ def trainNativeStage(config, task, stage, inputWeights, stageDir, runDir, runtim
             finally:
                 self.ema.ema = originalEma
 
-    overrides = {**config["parameters"], "model": str(Path(inputWeights).resolve()),
+    parameters = stageParameters(config, stage)
+    overrides = {**parameters, "model": str(Path(inputWeights).resolve()),
                  "data": str(runDir / "runtimeData" / stage["taskId"] / "dataset.yaml"),
                  "project": str(stageDir.parent), "name": stageDir.name, "exist_ok": False,
                  "epochs": stage["epochs"], "device": config["device"], "seed": config["seed"],
                  "task": "detect", "mode": "train", "resume": False, "pretrained": True,
                  "cls_remap": True, "split": "val", "val": True, "fraction": 1.0,
-                 "single_cls": False, "classes": None, "compile": False, "nbs": 2, "nms": False}
+                 "single_cls": False, "classes": None, "compile": False,
+                 "nbs": parameters.get("nbs", 2), "nms": False}
     trainer = AuditedDetectionTrainer(overrides=overrides)
     if trainer.save_dir.resolve() != stageDir.resolve():
         raise ValueError("Backend changed the requested new stage directory.")
@@ -169,10 +175,27 @@ def trainNativeStage(config, task, stage, inputWeights, stageDir, runDir, runtim
                    for value in model.state_dict().values()):
             raise ValueError("Training produced nonfinite model tensors.")
 
+    history = []
+
+    def afterFitEpoch(current):
+        row = {"epoch": current.epoch + 1, "fitness": float(current.fitness),
+               "bestFitness": float(current.best_fitness), "accumulate": current.accumulate,
+               "learningRates": [group["lr"] for group in current.optimizer.param_groups]}
+        if not math.isfinite(row["fitness"]) or not math.isfinite(row["bestFitness"]):
+            raise ValueError("Training returned nonfinite checkpoint selection fitness.")
+        history.append(row)
+        with (stageDir / "epochs.jsonl").open("a", encoding="utf-8") as output:
+            output.write(json.dumps(row, allow_nan=False) + "\n")
+
     trainer.add_callback("on_pretrain_routine_end", beforeTraining)
     trainer.add_callback("on_train_batch_end", afterBatch)
     trainer.add_callback("on_train_epoch_end", afterEpoch)
+    trainer.add_callback("on_fit_epoch_end", afterFitEpoch)
+    if trainer.device.type == "cuda":
+        torch.cuda.reset_peak_memory_stats(trainer.device)
+    started = time.perf_counter()
     trainer.train()
+    elapsed = time.perf_counter() - started
     verifyEvidence(runDir, runtimeEvidence)
     names = task["classes"]
     metrics = trainer.validator.metrics
@@ -181,7 +204,15 @@ def trainNativeStage(config, task, stage, inputWeights, stageDir, runDir, runtim
         for index, name in enumerate(names)
     ):
         raise ValueError("Validation did not process the exact selected annotations.")
-    result = validationMetrics(metrics, names, task["validationSupport"])
+    result = validationMetrics(metrics, names, task["validationSupport"], config["purpose"])
+    result["training"] = {"requestedEpochs": stage["epochs"], "completedEpochs": len(history),
+                          "bestEpoch": max(row["epoch"] for row in history if row["fitness"] == history[-1]["bestFitness"]),
+                          "selectionCriterion": "nativeValidationMap50To95", "elapsedSeconds": elapsed,
+                          "device": str(trainer.device), "amp": bool(trainer.amp),
+                          "peakCudaAllocatedBytes": torch.cuda.max_memory_allocated(trainer.device)
+                          if trainer.device.type == "cuda" else None,
+                          "peakCudaReservedBytes": torch.cuda.max_memory_reserved(trainer.device)
+                          if trainer.device.type == "cuda" else None}
     result["validationModel"] = "bestCheckpointReloadedAsFp32"
     checkpoints = {}
     for kind in ("best", "last"):

@@ -112,7 +112,7 @@ Stage evidence is in `stages/stage01GenericObjects`, `stage02RoleObjects`, and
 `effectiveArguments.json`, `optimizer.json`, `losses.jsonl`, native `results.csv`,
 `metrics.json`, and `weights/best.pt` and `last.pt`. Native messages are retained
 under `logs`. The next stage receives the prior `best.pt` hash, selected by the
-pinned backend's validation mAP50â€“95 fitness. Checkpoint tensors serialize as FP16
+pinned backend's validation mAP50:95 fitness. Checkpoint tensors serialize as FP16
 by backend convention even though forward/backward computation uses FP32.
 
 Per-class metrics with zero validation support are JSON null, including
@@ -193,3 +193,12 @@ The full validation cohorts are task-specific (541/541/539 in curriculumV1), not
 reduced to their common intersection. Missing validation classes remain N/A.
 Runtime images and labels are independent byte copies, with a disk-space check
 before copying. The immutable prepared bundle and frozen test split are preserved.
+
+Native scientific stages merge the declared stage learning rate, patience and
+warmup with shared parameters. The nominal batch is explicit; the legacy smoke
+retains nbs=2. Each epoch archives fitness, learning rates and accumulation in
+`epochs.jsonl`. Stage metrics record completed/best epochs, elapsed wall time and
+peak CUDA allocated/reserved memory when applicable. Best checkpoint selection
+uses native validation box mAP50:95, including artificial point boxes; native-point
+localization diagnostics remain separate from checkpoint selection. CUDA
+determinism sets CUBLAS_WORKSPACE_CONFIG before loading the backend.

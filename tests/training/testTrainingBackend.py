@@ -32,12 +32,24 @@ def testLoaderRejectsSilentAnnotationDrops(trainingBundle, tmp_path):
 
 
 @pytest.mark.trainingIntegration
+@pytest.mark.parametrize("scientific", [False, True])
 def testNativeCpuStagesProduceTwoThreeAndTwentyFiveClassCheckpoints(trainingBundle, tmp_path,
-                                                                  monkeypatch):
+                                                                  monkeypatch, scientific):
     from futsal.training.modelWeights import prepareWeights
     from futsal.training.trainingRun import runTraining
 
     bundle, configFile, config = trainingBundle
+    if scientific:
+        import yaml
+
+        from futsal.training.trainingConfig import loadTrainingConfig
+
+        config = loadTrainingConfig("configs/training/yolo26CurriculumPilot.yaml", readJson(bundle / "plan.json")["recipe"])
+        config.update(device="cpu", evaluationDevice="cpu")
+        config["parameters"].update(imgsz=64, batch=1, workers=0, nbs=2)
+        for stage in config["stages"]:
+            stage["epochs"] = 3
+        configFile.write_text(yaml.safe_dump(config))
     runDir = tmp_path / "nativeRun"
     initializeBackend(tmp_path / "modelSetup", config["numThreads"])
     import torch
@@ -81,6 +93,15 @@ def testNativeCpuStagesProduceTwoThreeAndTwentyFiveClassCheckpoints(trainingBund
         assert result["checkpoints"]["best"]["classCount"] == (2, 3, 25)[index]
         assert result["checkpoints"]["best"]["end2end"]
         assert readJson(stageDir / "optimizer.json")["initialStateEntries"] == 0
+        assert result["training"]["completedEpochs"] == (3 if scientific else 1)
+        assert 1 <= result["training"]["bestEpoch"] <= result["training"]["completedEpochs"]
+        if scientific:
+            import json
+
+            history = [json.loads(line) for line in (stageDir / "epochs.jsonl").read_text().splitlines()]
+            assert history[0]["learningRates"][0] > history[-1]["learningRates"][0]
+            assert readJson(stageDir / "effectiveArguments.json")["nbs"] == 2
+            assert result["interpretation"] == "scientificPilot"
     assert result["perClass"]["lowerCornerSideB"]["ap50"] is None
     assert networkCalls == []
     from futsal.evaluation.evaluationRun import evaluateRun
