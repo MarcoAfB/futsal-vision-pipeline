@@ -8,7 +8,7 @@ curriculum; scientific training and sports statistics remain subsequent stages.
 
 ## Development
 
-Use Python 3.13 and uv. From the project root, on Windows or Linux:
+Use Python 3.12 or 3.13 and uv. From the project root, on Windows or Linux:
 
 ```text
 uv sync --locked
@@ -26,7 +26,7 @@ server environment will be checked before scientific GPU training.
 
 ## Technical training smoke
 
-Install `uv sync --locked --extra training`, inspect the local CPU environment,
+Install `uv sync --locked --extra training --extra reporting`, inspect the local CPU environment,
 and prepare the explicit official YOLO26n weights. The `train` command then runs
 genericObjects -> roleObjects -> unified25 with 32 training records per stage,
 16 shared validation records, and one epoch per stage. It audits class-name

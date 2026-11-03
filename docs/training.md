@@ -1,12 +1,12 @@
 # YOLO26 training
 
 The training extra pins the technical CPU reference environment: PyTorch 2.9.1,
-torchvision 0.24.1 and ultralytics-opencv-headless 8.4.190 on Python 3.13.
+torchvision 0.24.1 and ultralytics-opencv-headless 8.4.190 on Python 3.12/3.13.
 PyTorch wheels come from the official CPU index. The default installation does
 not require training packages; dataset commands import no training backend.
 
 ```text
-uv sync --locked --extra training
+uv sync --locked --extra training --extra reporting
 uv run --extra training python -m futsal inspectEnvironment --device cpu --outputDir outputs/environment/localCpu
 ```
 
@@ -15,6 +15,20 @@ CUDA devices and a small tensor operation on the explicitly requested device.
 Missing dependencies or an unavailable GPU produce a report with ready=false and
 exit code 1. Input/output failures return 2. No device fallback is performed.
 The report can later be collected on UTFPR; its CUDA compatibility is not assumed.
+
+The mutually exclusive `trainingGpu` extra selects the same PyTorch/torchvision
+pair from the explicit CUDA 12.6 index. Choose one backend per environment:
+
+```text
+uv sync --locked --python /usr/bin/python3.12 --extra trainingGpu --extra reporting
+uv run --locked --python /usr/bin/python3.12 --extra trainingGpu --extra reporting python -m futsal inspectEnvironment --device 0 --outputDir outputs/environment/gpuCheck
+```
+
+Use the actual interpreter path installed on the server. Driver inspection,
+CUDA tensor execution and the requested device must succeed; there is no CPU
+fallback. Driver/library mismatch stderr is retained in the environment report.
+Installing a CUDA wheel does not fix a mismatched system driver. The reporting
+extra is needed for train's automatic post-training presentation.
 
 Ordinary tests stay offline and exclude the trainingIntegration marker. Native
 training tests are explicitly selected with that marker and the training extra.
