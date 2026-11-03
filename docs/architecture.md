@@ -16,7 +16,7 @@ importing a subpackage does not eagerly load its workflows or optional backends.
 | `annotations` | Read annotation formats, audit source geometry and convert detection targets. | `cvatReader`, `yoloAnnotations`, `annotationAudit`, `detectionGeometry` |
 | `inventory` | Register sources, inspect media and audit reviewed own/public records. | `catalog`, `mediaMetadata`, `inventory`, `ownInventory`, `yoloInventory` |
 | `datasets` | Apply recipes and quarantine, freeze match splits, extract eligible frames, export and verify derived datasets. | `recipes`, `matchSplits`, `datasetSamples`, `datasetPlan`, `datasetExport`, `datasetVerify`, `datasetFiles`, `frameExtraction`, `reviewImages` |
-| `training` | Inspect the environment, prepare weights, select development data, audit transfer and orchestrate native training. | `trainingEnvironment`, `modelWeights`, `trainingConfig`, `trainingData`, `checkpointTransfer`, `trainingBackend`, `trainingRun` |
+| `training` | Inspect the environment, prepare weights, select development data, audit transfer and orchestrate native training/continuation. | `trainingEnvironment`, `modelWeights`, `trainingConfig`, `trainingData`, `checkpointTransfer`, `trainingBackend`, `trainingContinuation`, `trainingRun` |
 | `evaluation` | Validate selections and predictions, run archived checkpoints and calculate detection/native-point metrics. | `evaluationData`, `evaluationBackend`, `evaluationMetrics`, `pointMetrics`, `evaluationRun` |
 | `reporting` | Render inventory/research reports, select examples, produce figures and coordinate research CLI processing. | `report`, `researchExamples`, `reportExamples`, `researchFigures`, `researchReport`, `researchCli` |
 
@@ -47,10 +47,18 @@ model or plotting backend. Backend imports remain deferred until their operation
 are requested; inventory and dataset commands do not require the training extra,
 and evidence-only rendering does not require model packages.
 
+`scripts` contains checkout-level operational tools. `datasetTransfer`,
+`resultTransfer` and their shared `transferArchive` helper use only the standard
+library, allowing verification/extraction before the model environment exists.
+`runServerTraining` invokes the project CLI through its current prepared interpreter
+and records launch evidence. These tools are not imported by the package or
+included in its wheel; server execution requires a real Git checkout.
+
 The former flat internal imports, such as `futsal.trainingRun`, are replaced by
 their domain paths. There are no forwarding modules or broad initializer exports.
-CLI names, arguments, exit statuses, configuration, dataset/evaluation formats and
-research metric definitions are unchanged.
+The restructuring preserved CLI names, arguments, configuration, data formats and
+research metric definitions. Later scientific schema/CLI additions are documented
+in [training](training.md) and [server training](serverTraining.md).
 
 ## Tests and archived source
 

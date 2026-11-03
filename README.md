@@ -3,8 +3,9 @@
 A reproducible foundation for futsal computer vision research, with source
 registration, read-only auditing and curriculum dataset preparation. The first
 experiment targets one detector for ball, four athlete classes and twenty court
-landmarks. An optional YOLO26 CPU technical smoke now validates the training
-curriculum; scientific training and sports statistics remain subsequent stages.
+landmarks. Audited smoke, real-data pilot and scientific curriculum profiles are
+implemented. The server pilot and scientific campaign require execution evidence;
+sports statistics remain subsequent work.
 
 ## Development
 
@@ -23,6 +24,16 @@ directory: `uv run pytest --basetemp .pytest_cache/localTestRun`.
 The environment is isolated from the previous implementation. The dependency lockfile
 is part of the project. The optional training extra uses CPU wheels; the UTFPR
 server environment will be checked before scientific GPU training.
+
+## Scientific server workflow
+
+Follow the [server guide](docs/serverTraining.md) for the real-only full curriculum,
+Python/CUDA environment, resource pilot, profile freeze, seeds and continuation.
+The scientific stages use complete task-specific cohorts, with explicit schedules
+and isolated runtime copies. [Transport scripts](docs/dataTransfer.md) package
+verified data and return checkpoints/sealed reports without runtime image copies.
+Scripts and technical profiles are versioned; datasets, archives and machine
+settings are ignored. Server execution is distinct from local software checks.
 
 ## Technical training smoke
 
@@ -44,7 +55,8 @@ checkpoint/data/code provenance. Research results and technical execution status
 remain distinct. Final test data is never evaluated by these commands.
 
 `evaluateRun` evaluates archived best checkpoints on either the recorded validation
-subset or an explicitly requested full validation set. `reportRun` regenerates
+cohort or an explicitly requested full validation set. Scientific profiles already
+record the full per-task cohorts and evaluate once. `reportRun` regenerates
 presentation from sealed evidence without model inference. After generation,
 open `outputs/reports/index.md`, then the linked `report.md`. Tables are CSV,
 plots are SVG/PNG, and qualitative examples are a small deterministic selection.
