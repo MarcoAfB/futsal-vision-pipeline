@@ -12,8 +12,9 @@ automatically calibrated or model-quality acceptance thresholds.
 
 `runValidation` uses exactly the saved training validation selection, verified
 against the prepared manifest. `fullValidation` uses all eligible own validation
-records for each task. The two selections produce separate evaluations. They do
-not change task quarantine or the original-match split.
+records for each task. Explicit calls produce separate evaluation archives. The
+scientific profile records full per-task cohorts, so those selections are equal
+and automatic postprocessing runs once. Neither changes task quarantine or splits.
 
 References retain original image dimensions, derived pixel boxes, source annotation
 indices and native point coordinates. A prediction JSONL contains one complete
@@ -45,7 +46,8 @@ are not treated as independent statistical replicates.
 
 ## Archived evaluation
 
-The local validation adapter loads each archived best checkpoint as FP32 on CPU,
+The validation adapter loads each archived best checkpoint as FP32 on the declared
+evaluation device (CPU for old smoke runs; schema 2 explicitly selects CPU/CUDA),
 with the training image size, batch configuration and explicit YOLO26 end-to-end
 mode. It uses native validation through a read-only trainer context, without an
 optimizer or the generic dataset downloader. Native matching masks and image order
@@ -56,7 +58,8 @@ rescaling/clipping boxes for display cannot change the recorded native AP matche
 The evaluation binds the training run, checkpoint hashes, exact selection, protocol,
 code snapshot, native references, predictions, metrics, and small example source
 archive. A sealed evaluation contract protects those inputs. Working image/label
-copies and caches live in short `outputs/evaluationWork` directories, outside the
+copies and caches live in short `outputs/evaluationWork` directories by default,
+or an explicit `--workRoot`, outside the
 report bundle and archived training run. The short workspace avoids Windows path
 limits for long SHA-256 image filenames. Failure traces and partial results remain;
 later stages do not execute after a failed stage. Bundle and runtime hashes are
@@ -176,5 +179,6 @@ Ruff passed and the regular suite passed 160 tests. Three optional native tests
 passed, including synthetic run/full validation, offline execution and native AP
 parity. Two optional presentation tests passed again in the reporting-only
 environment. Full real validation was not requested or run; final test evaluation,
-threshold calibration, scientific training and UTFPR GPU compatibility remain
-subsequent work.
+threshold calibration and the actual scientific GPU campaign remain unexecuted
+at that reporting checkpoint. The current [server workflow](serverTraining.md)
+adds scientific execution profiles without asserting server GPU compatibility.

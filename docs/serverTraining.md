@@ -150,3 +150,21 @@ dataReceived, environmentReady, pilotCompleted, seedRunCompleted,
 validationCompleted, reportCompleted and resultsReceived. Local software/native
 fixture checks establish engineering readiness, not server CUDA compatibility or
 a completed scientific campaign. No actual server execution is asserted by this guide.
+
+## Local implementation verification
+
+On 2026-11-03, Ruff and 199 regular tests passed. The complete regular suite also
+passed on Python 3.12.3, including 201 tests when the two presentation tests were
+enabled in a reporting-only environment with torch, torchvision and Ultralytics
+physically absent. Both Python 3.12.3 and 3.13.5 passed all six optional native/
+presentation tests, including one-epoch and three-epoch 2 -> 3 -> 25 curricula,
+native AP parity, exact loader/checkpoint checks and report regeneration.
+Native training tests used isolated generated fixtures and fixture weights only.
+
+The real prepared bundle passed full semantic verification of 9,555 development
+images/labels. Its 19,199 files were streamed into a verified archive, retaining
+the original dataset contract. Existing real smoke results also passed selective
+pack/import/report regeneration: 270 included files and 29 byte-identical CSV
+tables, with unchanged source run metadata. No real scientific training or server
+GPU execution was performed. Driver correction, target receipt/extraction,
+environment verification, resource pilot and campaign remain pending there.

@@ -17,8 +17,9 @@ classes, and twenty fixed court landmarks. Data preparation follows three tasks:
 `configs/curriculum.yaml` declares task mappings separately from the ordered
 curriculum. Original team and role labels remain available. A future experiment
 can use a different task or sequence without changing the source ontology.
-Training and checkpoint transfer are subsequent work; changing class indices
-between stages does not establish semantic equivalence of classifier outputs.
+Audited training and checkpoint transfer are described in [training](training.md);
+changing class indices between stages does not establish semantic equivalence of
+classifier outputs.
 
 `curriculum` selects an ordered subset of the declared tasks. A one-element
 sequence prepares a standalone task with the same implementation. `coverageTask`
@@ -201,5 +202,21 @@ Tests use generated fixtures and include a single active stage, portability,
 modified labels and YAMLs, decoder interruption and source preservation.
 At this preparation checkpoint, no training, model inference or scientific
 performance evaluation was performed. See [training](training.md) for the later
-CPU backend validation and the pending real-data smoke. UTFPR GPU environment
-checks remain subsequent work.
+completed CPU backend validation and real-data smoke. Current scientific profiles,
+transport and pending server execution are described in [server training](serverTraining.md).
+
+## Reusing data for later model configurations
+
+Keep original records, native annotations and the frozen match assignments as the
+common source of truth. Current task bundles are independent projections for the
+three curriculum stages; their images and labels are reused by the current full
+pilot/scientific profiles. Runtime copies belong to each attempt, while prepared
+data stay immutable.
+
+Later detailed/generic object, court-only or separate player/ball models should
+declare their own class mappings, source compatibility and per-task quarantine,
+then receive new verified bundle contracts using the same match split. Rebuild
+those views from native provenance/eligible records when their experiments are
+implemented. Stripping labels from unified25 alone cannot recover records that
+were excluded only by its stricter point-related quarantine. No new variants or
+raw test-data cache are materialized for this first curriculum delivery.

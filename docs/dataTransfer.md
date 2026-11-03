@@ -75,3 +75,16 @@ verification of omitted bytes. The original server attempt stays intact. A seale
 report can be regenerated with `reportRun --evaluationDir <import>/reports/report01
 --outputDir <newPresentation>` without inference. A new evaluation reconstructs
 runtime copies from the matching prepared bundle and saved selection.
+
+## Verified curriculumV1 archive
+
+On 2026-11-03, full semantic verification passed before packaging curriculumV1.
+The archive check verified all 19,199 members before publication. Uncompressed
+file bytes total 8,857,066,554; gzip level 1 produced 8,794,423,052 bytes.
+The archive SHA-256 is
+`77e93f86d2db78b7a5b3aad4580e93fe08f4763e755c423fcff9114c1432d94c`.
+The unchanged dataset contract is
+`3d7e7fe9ba0e45ee2bc4a0ac3f3a435ccd74c01285a26fa4eac6e595b4b1f0e1`.
+Local files are `data/transfers/curriculumV1.tar.gz` and
+`data/transfers/curriculumV1.receipt.json`, excluded from Git. A full extraction
+on the target remains required; no second full local dataset copy was created.

@@ -127,7 +127,7 @@ does not certify annotation completeness or declare missing target labels to be
 negative examples. Empty labels must be reported as empty, not automatically
 certified as true negatives.
 
-Public sources are eligible only for future training. Their listed metadata is
+Public sources are eligible only for compatible training stages. Their listed metadata is
 evidence to inventory, not a grant of redistribution rights. Missing metadata
 must remain explicit.
 
