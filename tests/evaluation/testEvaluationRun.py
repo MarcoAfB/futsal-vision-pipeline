@@ -86,3 +86,25 @@ def testBackendMutationRetainsFailureAndStopsLaterEvaluationStages(evaluationRun
     assert hashFile(bundle / "contract.json") == before
     assert "changed" in (output / "evidence" / "failure.txt").read_text()
     assert readJson(output / "evaluation.json")["status"] == "failed"
+
+
+def testEvaluationUsesExplicitWorkRootAndRefusesGpuFallback(evaluationRunFixture, tmp_path, monkeypatch):
+    from futsal.datasets.datasetFiles import writeJson
+    from futsal.evaluation.evaluationRun import newEvaluationPath
+
+    bundle, runDir, _ = evaluationRunFixture
+    root = tmp_path / "scratch"
+    state = evaluateRun(runDir, bundle, "configs/evaluation/researchValidation.yaml", "runValidation",
+                        tmp_path / "cpuEvaluation", progress=lambda message: None, workRoot=root)
+    assert Path(state["workDirectory"]).parent == root
+    assert newEvaluationPath(runDir, reportRoot=tmp_path / "reports").parent == tmp_path / "reports" / runDir.name
+    run = readJson(runDir / "run.json")
+    run["configuration"]["evaluationDevice"] = "0"
+    writeJson(runDir / "run.json", run)
+    calls = []
+    monkeypatch.setattr("futsal.evaluation.evaluationRun.inspectEnvironment", lambda device: {"ready": False})
+    monkeypatch.setattr("futsal.evaluation.evaluationRun.predictValidation", lambda *args: calls.append(True))
+    failed = evaluateRun(runDir, bundle, "configs/evaluation/researchValidation.yaml", "runValidation",
+                         tmp_path / "gpuEvaluation", progress=lambda message: None, workRoot=root)
+    assert failed["status"] == "failed" and calls == []
+    assert "no CPU fallback" in failed["error"]["message"]

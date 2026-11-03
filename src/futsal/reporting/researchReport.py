@@ -143,6 +143,14 @@ def stageMarkdown(root, state, stage):
     if training:
         lines += [f"Training stage elapsed: {number(elapsedSeconds(training, 'completedAt'))} s "
                   "(including setup and validation).", ""]
+        execution = training.get("results", {}).get("training")
+        if execution:
+            lines += markdownTable(["Maximum epochs", "Completed epochs", "Best epoch", "Device", "AMP", "Peak CUDA allocated (MiB)"],
+                [[execution["requestedEpochs"], execution["completedEpochs"], execution["bestEpoch"],
+                  execution["device"], execution["amp"], execution["peakCudaAllocatedBytes"] / 1024 ** 2
+                  if execution["peakCudaAllocatedBytes"] is not None else None]])
+            lines += ["Checkpoint selection uses native validation box AP, including the derived boxes for landmarks. "
+                      "Point localization below is measured against the original native points.", ""]
     if (evidenceDir / "transferAudit.json").is_file():
         audit = readJson(evidenceDir / "transferAudit.json")
         optimizer = readJson(evidenceDir / "optimizer.json")
@@ -225,6 +233,9 @@ def stageMarkdown(root, state, stage):
 def reportMarkdown(root, state):
     config = state["protocol"]
     trainingCode, evaluationCode = state["training"].get("code", {}), state.get("code", {})
+    interpretation = {"technicalSmoke": "This technical smoke does not estimate scientific model quality.",
+                      "scientificPilot": "This resource/execution pilot does not establish scientific model quality.",
+                      "scientificTraining": "This is a single-seed validation result. Repetitions and controlled comparisons are required for comparative conclusions."}.get(state["purpose"], "Interpret results within the declared run purpose.")
     lines = ["# Validation research report", "", f"Run: **{state['trainingRunId']}**. Purpose: **{state['purpose']}**.", "",
              *markdownTable(["Training", "Evaluation", "Selection", "Test evaluated"],
                             [[state["training"]["status"], state["status"], state["selection"], False]]),
@@ -232,7 +243,7 @@ def reportMarkdown(root, state):
                             [[elapsedSeconds(state["training"]), elapsedSeconds(state)]]),
              "Elapsed times include integrity verification and processing overhead; they are not inference benchmarks.", "",
              "Each curriculum stage is a different task. Stage scores are not a ranking or evidence that "
-             "the curriculum improves performance. This technical smoke does not estimate scientific model quality.", "",
+             f"the curriculum improves performance. {interpretation}", "",
              "## Reading guide", "", *[f"- [{stage['taskId']}](#{stage['taskId'].lower()})" for stage in state["stages"]], "",
              "## Protocol and provenance", "",
              f"Confidence floor: {config['confidenceFloor']:g}; operational confidence >= {config['operationalConfidence']:g}; "
@@ -248,6 +259,21 @@ def reportMarkdown(root, state):
              "Input and evidence checks are recorded in [evaluation.json](evaluation.json) and "
              "[evaluationContract.json](evaluationContract.json). No automatic threshold calibration, test evaluation, "
              "experiment comparison, inferential significance test or hardware performance benchmark is performed.", ""]
+    trainingConfig = state["training"].get("configuration", {})
+    if trainingConfig.get("schemaVersion") == 2:
+        lines += ["### Curriculum execution", "",
+                  f"Seed: {trainingConfig['seed']}; source policy: {trainingConfig['sourcePolicy']}; "
+                  f"evaluation device: {state.get('requestedDevice', 'cpu')}; "
+                  f"physical batch: {trainingConfig['parameters']['batch']}; nominal batch: {trainingConfig['parameters']['nbs']}.", "",
+                  f"Method ID: `{state['training'].get('methodId', 'unavailable')}`. "
+                  f"Resolved configuration ID: `{state['training'].get('configurationId', 'unavailable')}`.", "",
+                  "Validation uses every eligible record per task. The common intersection is reserved for shared "
+                  "examples; it does not reduce task metrics. runValidation and fullValidation select the same "
+                  "cohorts for this full-data profile; automatic evaluation runs once.", ""]
+        if state["training"].get("continuation"):
+            parent = state["training"]["continuation"]
+            lines += [f"Continuation reuses {parent['completedStageCount']} completed stages from run "
+                      f"`{parent['previousRunSha256']}`. The next stage restarted at epoch zero.", ""]
     if state.get("ownSplitSummaries"):
         rows = [{"taskId": taskId, "split": split, "reviewedOwnRecords": values["reviewedFrameCount"],
                  "reviewedOwnFraction": values["reviewedFraction"], "eligibleOwnRecords": values["eligibleFrameCount"],

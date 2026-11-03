@@ -3,6 +3,7 @@ from types import SimpleNamespace
 
 from futsal.datasets.datasetFiles import writeJson
 from futsal.training.trainingBackend import verifyLoader
+from futsal.training.trainingConfig import stageParameters
 
 
 def predictValidation(checkpoint, task, references, stage, trainingConfig, config, workDir):
@@ -15,11 +16,14 @@ def predictValidation(checkpoint, task, references, stage, trainingConfig, confi
     workDir = Path(workDir).resolve()
     root = workDir / "runtimeData" / task["taskId"]
     names = task["classes"]
-    model, _ = load_checkpoint(Path(checkpoint), device="cpu", fuse=False)
+    requested = trainingConfig.get("evaluationDevice", "cpu")
+    device = torch.device("cpu" if requested == "cpu" else f"cuda:{requested}")
+    model, _ = load_checkpoint(Path(checkpoint), device=device, fuse=False)
     if model.names != dict(enumerate(names)) or not model.end2end or model.model[-1].nc != len(names):
         raise ValueError("Evaluation checkpoint differs from the selected stage ontology or YOLO26 mode.")
-    args = get_cfg(overrides={**trainingConfig["parameters"], "mode": "val", "task": "detect",
-                             "device": "cpu", "nms": False, "conf": config["confidenceFloor"],
+    configuredStage = next(item for item in trainingConfig["stages"] if item["taskId"] == task["taskId"])
+    args = get_cfg(overrides={**stageParameters(trainingConfig, configuredStage), "mode": "val", "task": "detect",
+                             "device": requested, "nms": False, "conf": config["confidenceFloor"],
                              "max_det": config["maxDetections"], "save_json": False,
                              "save_txt": False, "plots": False, "verbose": False,
                              "split": "val", "rect": True, "single_cls": False,
@@ -32,7 +36,7 @@ def predictValidation(checkpoint, task, references, stage, trainingConfig, confi
     taskRows = {"validation": task["rows"]}
     writeJson(workDir / f"{task['taskId']}LoaderAudit.json", verifyLoader(dataset, taskRows, "validation", workDir))
     loader = build_dataloader(dataset, batch=args.batch * 2, workers=0, shuffle=False,
-                              rank=-1, device=torch.device("cpu"))
+                              rank=-1, device=device)
     expected = {(workDir / "runtimeData" / row["imagePath"]).resolve(): row for row in references}
     predictions = []
 
@@ -57,8 +61,8 @@ def predictValidation(checkpoint, task, references, stage, trainingConfig, confi
 
     validator = CapturingValidator(loader, save_dir=workDir / "nativeValidation" / task["taskId"],
                                    args=vars(args))
-    context = SimpleNamespace(ema=SimpleNamespace(ema=model), device=torch.device("cpu"), data=data,
-                              amp=False, loss_items={key: torch.tensor(0.0) for key in stage["results"]["losses"]},
+    context = SimpleNamespace(ema=SimpleNamespace(ema=model), device=device, data=data,
+                              amp=False, loss_items={key: torch.tensor(0.0, device=device) for key in stage["results"]["losses"]},
                               stopper=SimpleNamespace(possible_stop=False), epoch=0, epochs=1,
                               world_size=1, label_loss_items=lambda loss, prefix: {})
     validator(trainer=context)

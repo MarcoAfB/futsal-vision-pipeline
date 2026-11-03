@@ -103,6 +103,21 @@ def reportEvaluation(trainingBundle, tmp_path):
     return root
 
 
+def testScientificReportDistinguishesPilotFromSingleSeedValidation(reportEvaluation, monkeypatch):
+    state = readJson(reportEvaluation / "evaluation.json")
+    state["training"]["configuration"] = {"schemaVersion": 2, "seed": 42, "sourcePolicy": "realOnly",
+                                            "parameters": {"batch": 2, "nbs": 64}}
+    state["requestedDevice"] = "0"
+    monkeypatch.setattr(researchReport, "stageMarkdown", lambda *args: [])
+    state["purpose"] = "scientificPilot"
+    text = researchReport.reportMarkdown(reportEvaluation, state)
+    assert "resource/execution pilot" in text and "technical smoke" not in text
+    state["purpose"] = "scientificTraining"
+    text = researchReport.reportMarkdown(reportEvaluation, state)
+    assert "single-seed validation" in text and "technical smoke" not in text
+    assert "evaluation device: 0" in text and "realOnly" in text
+
+
 @pytest.mark.reportingIntegration
 def testReportRegeneratesWithoutTorchAndPreservesEvidence(reportEvaluation, tmp_path, monkeypatch):
     import sys

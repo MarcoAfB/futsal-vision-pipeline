@@ -220,3 +220,20 @@ parent and copies the completed stage evidence. The next stage restarts at epoch
 zero from its original input with a new optimizer. This does not resume an epoch
 or select metrics across attempts. Original attempts are preserved. Runs created
 before configuration IDs were introduced cannot be continued this way.
+
+## Evaluation and output locations
+
+Schema 2 declares `evaluationDevice` independently of training: `cpu` or a single
+CUDA index string. A requested GPU must pass environment inspection; failure is
+retained in the sealed evaluation, without CPU fallback. Old smoke runs continue
+to evaluate on CPU. Native AP masks/order and original-pixel point metrics retain
+the existing research protocol.
+
+Use `train --reportRoot <reports> --workRoot <scratch>` to place presentations and
+disposable evaluation copies outside the checkout. Standalone `evaluateRun`
+accepts `--workRoot` too. All destination leaves must be new and outside inputs.
+Scientific runValidation replays the saved full per-task validation cohorts;
+fullValidation selects the same records. Automatic postprocessing evaluates once.
+Training, evaluation and presentation success remain separate statuses. Reports
+identify pilots, single-seed scientific results, execution resources and any
+completed-stage reuse; they do not rank the three different stage ontologies.

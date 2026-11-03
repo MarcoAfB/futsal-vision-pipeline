@@ -47,6 +47,8 @@ def main(argv: list[str] | None = None) -> int:
     trainParser.add_argument("--outputDir", type=Path, required=True)
     trainParser.add_argument("--seed", type=int)
     trainParser.add_argument("--continueFrom", type=Path)
+    trainParser.add_argument("--reportRoot", type=Path)
+    trainParser.add_argument("--workRoot", type=Path)
     trainParser.add_argument("--evaluationConfig", type=Path, default=Path("configs/evaluation/researchValidation.yaml"))
     from futsal.reporting.researchCli import addResearchCommands
 
@@ -75,7 +77,8 @@ def main(argv: list[str] | None = None) -> int:
         from futsal.reporting.researchCli import generateRunReport
 
         try:
-            complete, path = generateRunReport(arguments.outputDir, arguments.datasetDir, arguments.evaluationConfig)
+            complete, path = generateRunReport(arguments.outputDir, arguments.datasetDir, arguments.evaluationConfig,
+                                               reportRoot=arguments.reportRoot, workRoot=arguments.workRoot)
         except (OSError, ValueError, ImportError) as error:
             print(f"Research report could not start: {error}")
             return 1

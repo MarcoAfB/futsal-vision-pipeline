@@ -22,7 +22,7 @@ from futsal.reporting.report import atomicWrite
 from futsal.reporting.researchExamples import fixedExamples, selectExamples
 from futsal.training.trainingBackend import initializeBackend
 from futsal.training.trainingData import copyRuntimeData
-from futsal.training.trainingEnvironment import packageVersions
+from futsal.training.trainingEnvironment import inspectEnvironment, packageVersions
 from futsal.training.trainingRun import fileEvidence, snapshotCode, utcNow, verifyBundleUnchanged
 
 
@@ -31,10 +31,11 @@ def saveEvaluation(outputDir, state):
                                                          ensure_ascii=False, indent=2) + "\n")
 
 
-def newEvaluationPath(runDir, selection="runValidation"):
+def newEvaluationPath(runDir, selection="runValidation", reportRoot=None):
     runDir = Path(runDir).resolve()
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
-    return runDir.parent.parent / "reports" / runDir.name / f"{selection}-{stamp}"
+    root = Path(reportRoot).resolve() if reportRoot is not None else runDir.parent.parent / "reports"
+    return root / runDir.name / f"{selection}-{stamp}"
 
 
 def archiveExamples(datasetDir, outputDir, selected, references):
@@ -103,7 +104,7 @@ def sealEvaluation(outputDir, state):
     writeJson(outputDir / "evaluationContract.json", contract)
 
 
-def evaluateRun(runDir, datasetDir, configPath, selection, outputDir, progress=print):
+def evaluateRun(runDir, datasetDir, configPath, selection, outputDir, progress=print, *, workRoot=None):
     runDir, datasetDir = Path(runDir).resolve(), Path(datasetDir).resolve()
     outputDir = validateResearchOutput(outputDir, [datasetDir, runDir], [Path(configPath)])
     config = loadEvaluationConfig(configPath)
@@ -116,8 +117,10 @@ def evaluateRun(runDir, datasetDir, configPath, selection, outputDir, progress=p
         key: value for key, value in contract.items() if key != "contractId"
     }):
         raise ValueError("Evaluation dataset contract differs from the verified training input.")
-    workDir = Path(futsal.__file__).resolve().parents[2] / "outputs" / "evaluationWork" / hashJson(str(outputDir))[:16]
-    validateResearchOutput(workDir, [datasetDir, runDir], [Path(configPath)])
+    workRoot = Path(workRoot).resolve() if workRoot is not None else Path(futsal.__file__).resolve().parents[2] / "outputs" / "evaluationWork"
+    workDir = workRoot / hashJson(str(outputDir))[:16]
+    validateResearchOutput(workDir, [datasetDir, runDir, outputDir], [Path(configPath)])
+    validateResearchOutput(outputDir, [datasetDir, runDir, workDir], [Path(configPath)])
     outputDir.mkdir(parents=True)
     (outputDir / "evidence").mkdir()
     workDir.mkdir(parents=True)
@@ -132,6 +135,7 @@ def evaluateRun(runDir, datasetDir, configPath, selection, outputDir, progress=p
              "datasetSummary": contract["summary"], "ownSplitSummaries": plan["ownSplitSummaries"],
              "reviewedOwnRecordCount": plan["catalog"]["data"]["expected"]["reviewedFrames"],
              "environment": packageVersions(), "workDirectory": str(workDir)}
+    state["requestedDevice"] = run["configuration"].get("evaluationDevice", "cpu")
     saveEvaluation(outputDir, state)
     contractHash = hashFile(datasetDir / "contract.json")
     current = None
@@ -144,6 +148,11 @@ def evaluateRun(runDir, datasetDir, configPath, selection, outputDir, progress=p
         progress("Checking the prepared bundle and archived training artifacts before evaluation...")
         state["bundleBefore"] = verifyBundleUnchanged(datasetDir, contract, contractHash)
         verifyEvidence(runDir, run["artifacts"])
+        if state["requestedDevice"] != "cpu":
+            state["deviceInspection"] = inspectEnvironment(state["requestedDevice"])
+            saveEvaluation(outputDir, state)
+            if not state["deviceInspection"]["ready"]:
+                raise ValueError("Requested evaluation GPU is not ready; no CPU fallback is allowed.")
         initializeBackend(workDir / "backend", run["configuration"]["numThreads"])
         fixedIds = fixedExamples(tasks, config)
         stages = {stage["taskId"]: stage for stage in run["stages"]}

@@ -11,6 +11,7 @@ def addResearchCommands(commands):
     evaluate.add_argument("--selection", choices=["runValidation", "fullValidation"], default="runValidation")
     evaluate.add_argument("--config", type=Path, default=Path("configs/evaluation/researchValidation.yaml"))
     evaluate.add_argument("--outputDir", type=Path, required=True)
+    evaluate.add_argument("--workRoot", type=Path)
     report = commands.add_parser("reportRun", help="Render archived evaluation or training evidence without inference.")
     source = report.add_mutually_exclusive_group(required=True)
     source.add_argument("--evaluationDir", type=Path)
@@ -29,13 +30,13 @@ def handleResearchCommand(arguments):
         return 0
     result = evaluateRun(arguments.runDir, arguments.datasetDir, arguments.config,
                          arguments.selection, arguments.outputDir,
-                         progress=lambda message: print(message, flush=True))
+                         progress=lambda message: print(message, flush=True), workRoot=arguments.workRoot)
     path = renderReport(arguments.outputDir)
     print(f"Evaluation status: {result['status']}; report: {path}")
     return 0 if result["status"] == "completed" else 1
 
 
-def generateRunReport(runDir, datasetDir, configPath):
+def generateRunReport(runDir, datasetDir, configPath, reportRoot=None, workRoot=None):
     from futsal.evaluation.evaluationData import validateResearchOutput
     from futsal.evaluation.evaluationRun import evaluateRun, newEvaluationPath
     from futsal.reporting.researchReport import (
@@ -47,13 +48,13 @@ def generateRunReport(runDir, datasetDir, configPath):
 
     runDir = Path(runDir).resolve()
     run = readJson(runDir / "run.json")
-    output = newEvaluationPath(runDir)
+    output = newEvaluationPath(runDir) if reportRoot is None else newEvaluationPath(runDir, reportRoot=reportRoot)
     validateResearchOutput(output, [runDir, Path(datasetDir)], [Path(configPath)])
     startedAt = utcNow()
     try:
         if run["status"] == "completed":
             result = evaluateRun(runDir, datasetDir, configPath, "runValidation", output,
-                                 progress=lambda message: print(message, flush=True))
+                                 progress=lambda message: print(message, flush=True), workRoot=workRoot)
             path = renderReport(output)
             return result["status"] == "completed", path
         return False, renderTrainingReport(runDir, output)

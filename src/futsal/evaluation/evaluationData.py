@@ -79,6 +79,10 @@ def evaluationTasks(datasetDir, runDir, run, selection):
             requested = saved["tasks"][taskId]["validation"]
             if any(byId.get(row["recordId"]) != row for row in requested):
                 raise ValueError("Saved validation selection differs from the prepared manifest.")
+            if saved.get("selectionMethod") == "fullPerTask" and (
+                len(requested) != len(byId) or {row["recordId"] for row in requested} != set(byId)
+            ):
+                raise ValueError("Full per-task validation must retain every eligible record.")
             rows = requested
         if not rows or any(row["origin"] != "own" for row in rows):
             raise ValueError("Evaluation requires eligible own validation records.")
