@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from futsal.datasets.datasetFiles import readJson, verifyEvidence
+from futsal.datasets.datasetFiles import readJson, verifyEvidence, writeJson
 from futsal.training.trainingConfig import loadTrainingConfig
 from futsal.training.trainingData import copyRuntimeData, selectRows, selectTrainingData
 
@@ -54,4 +54,40 @@ def testTrainingConfigurationRejectsUnsafeOverridesAndStageOrder(trainingBundle)
     config["stages"].reverse()
     configFile.write_text(yaml.safe_dump(config))
     with pytest.raises(ValueError, match="curriculum order"):
+        loadTrainingConfig(configFile, recipe)
+
+
+def testScientificSelectionKeepsFullTaskCohortsAndRejectsSyntheticProvenance(trainingBundle):
+    bundle, _, _ = trainingBundle
+    config = loadTrainingConfig("configs/training/yolo26Curriculum.yaml", readJson(bundle / "plan.json")["recipe"])
+    manifest = readJson(bundle / "manifest.json")
+    removed = next(row for row in manifest["samples"] if row["taskId"] == "unified25" and row["split"] == "validation")
+    manifest["samples"].remove(removed)
+    writeJson(bundle / "manifest.json", manifest)
+    selection = selectTrainingData(bundle, config)
+    assert len(selection["tasks"]["genericObjects"]["validation"]) == 2
+    assert len(selection["tasks"]["unified25"]["validation"]) == 1
+    assert len(selection["commonValidationRecordIds"]) == 1
+    assert selection["sourcePolicy"]["provenanceVerified"]
+    manifest["samples"][0]["origin"] = "synthetic"
+    writeJson(bundle / "manifest.json", manifest)
+    with pytest.raises(ValueError, match="provenance"):
+        selectTrainingData(bundle, config)
+
+
+def testScientificConfigurationRejectsSubsetsAndUnsafeStageParameters(trainingBundle):
+    import yaml
+
+    bundle, configFile, _ = trainingBundle
+    recipe = readJson(bundle / "plan.json")["recipe"]
+    config = loadTrainingConfig("configs/training/yolo26CurriculumPilot.yaml", recipe)
+    assert [stage["epochs"] for stage in config["stages"]] == [2, 2, 2]
+    config["trainSampleCount"] = 32
+    configFile.write_text(yaml.safe_dump(config))
+    with pytest.raises(ValueError, match="full per-task"):
+        loadTrainingConfig(configFile, recipe)
+    config["trainSampleCount"] = None
+    config["stages"][0]["parameters"]["fliplr"] = 0.5
+    configFile.write_text(yaml.safe_dump(config))
+    with pytest.raises(ValueError, match="override only"):
         loadTrainingConfig(configFile, recipe)

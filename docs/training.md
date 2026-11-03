@@ -112,7 +112,7 @@ Stage evidence is in `stages/stage01GenericObjects`, `stage02RoleObjects`, and
 `effectiveArguments.json`, `optimizer.json`, `losses.jsonl`, native `results.csv`,
 `metrics.json`, and `weights/best.pt` and `last.pt`. Native messages are retained
 under `logs`. The next stage receives the prior `best.pt` hash, selected by the
-pinned backend's validation mAP50–95 fitness. Checkpoint tensors serialize as FP16
+pinned backend's validation mAP50â€“95 fitness. Checkpoint tensors serialize as FP16
 by backend convention even though forward/backward computation uses FP32.
 
 Per-class metrics with zero validation support are JSON null, including
@@ -175,3 +175,21 @@ Runtime copies and initial input evidence also retained their hashes. Training
 completed with exit code 0. The very low one-epoch detection scores are technical
 diagnostics and are not scientific performance estimates. Final test evaluation
 and UTFPR GPU compatibility remain outside this local validation.
+
+## Scientific curriculum configuration
+
+Schema 2 profiles select every eligible training and validation record per task.
+`yolo26Curriculum.yaml` proposes maximum epochs 80/60/100; the separate
+`yolo26CurriculumPilot.yaml` uses two epochs per stage on the same complete real
+cohorts. Neither profile is evidence that a campaign has run. Both require
+`sourcePolicy: realOnly`, checked against registered sources and native record
+provenance. Synthetic training sources are rejected. Generated software fixtures
+remain isolated from scientific inputs.
+
+Stage overrides are restricted to learning rate, patience and warmup. FP32 SGD,
+all augmentations disabled, explicit physical batch 2 and nominal batch 64 define
+the initial baseline. Record pilot resource measurements before freezing a profile.
+The full validation cohorts are task-specific (541/541/539 in curriculumV1), not
+reduced to their common intersection. Missing validation classes remain N/A.
+Runtime images and labels are independent byte copies, with a disk-space check
+before copying. The immutable prepared bundle and frozen test split are preserved.

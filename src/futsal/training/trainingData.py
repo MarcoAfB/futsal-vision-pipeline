@@ -42,6 +42,8 @@ def selectTrainingData(datasetDir, config):
     plan, manifest = readJson(root / "plan.json"), readJson(root / "manifest.json")
     taskIds = [stage["taskId"] for stage in config["stages"]]
     tasks = [task for task in activeTasks(plan["recipe"]) if task["taskId"] in taskIds]
+    if config.get("schemaVersion") == 2:
+        return selectFullData(plan, manifest, tasks, config)
     rows = {task["taskId"]: {split: [row for row in manifest["samples"]
             if row["taskId"] == task["taskId"] and row["split"] == split]
             for split in ("training", "validation")} for task in tasks}
@@ -74,8 +76,72 @@ def selectTrainingData(datasetDir, config):
     return selection
 
 
+def verifyRealSources(plan, manifest, tasks):
+    catalog = plan["catalog"]["data"]
+    publicIds = {source["sourceId"] for source in catalog["publicSources"]}
+    ownIds = {video["videoId"] for video in catalog["ownVideos"]}
+    syntheticIds = {source["sourceId"] for source in catalog["syntheticSources"]}
+    byRecord = {sample["recordId"]: sample for sample in plan["samples"]}
+    byTask = {task["taskId"]: task for task in tasks}
+    for task in tasks:
+        declared = set(task["trainingSources"])
+        if not declared <= publicIds | {"own"} or declared & syntheticIds:
+            raise ValueError("realOnly rejects unregistered or synthetic task sources.")
+    counts = Counter()
+    for row in manifest["samples"]:
+        if row["taskId"] not in byTask:
+            continue
+        native = byRecord.get(row["recordId"], {})
+        if any(native.get(key) != row.get(key) for key in ("origin", "sourceId", "mediaPath", "annotationSha256")):
+            raise ValueError("realOnly requires matching native source provenance.")
+        origin, sourceId = row["origin"], row["sourceId"]
+        if sourceId in syntheticIds or not ((origin == "own" and sourceId in ownIds) or
+                                            (origin == "public" and sourceId in publicIds)):
+            raise ValueError("realOnly rejects synthetic or unregistered sample provenance.")
+        allowed = byTask[row["taskId"]]["trainingSources"]
+        if row["split"] not in {"training", "validation"} or (row["split"] == "validation" and origin != "own"):
+            raise ValueError("Scientific selection permits real development splits only.")
+        if row["split"] == "training" and ("own" if origin == "own" else sourceId) not in allowed:
+            raise ValueError("Training sample source is not declared by its task.")
+        counts[sourceId] += 1
+    return {"policy": "realOnly", "provenanceVerified": True, "exportedRowsBySource": dict(counts)}
+
+
+def selectFullData(plan, manifest, tasks, config):
+    policy = verifyRealSources(plan, manifest, tasks)
+    selection = {"schemaVersion": 2, "seed": config["seed"], "sourcePolicy": policy,
+                 "selectionMethod": "fullPerTask", "tasks": {}}
+    for task in tasks:
+        taskId, names = task["taskId"], task["classes"]
+        splits = {split: sorted((row for row in manifest["samples"] if row["taskId"] == taskId
+                                  and row["split"] == split), key=lambda row: row["recordId"])
+                  for split in ("training", "validation")}
+        if not splits["validation"] or not splits["training"] or not all(classSupport(splits["training"], names).values()):
+            raise ValueError(f"Full data require nonempty splits and all training classes: {taskId}.")
+        selection["tasks"][taskId] = {"classes": names, **splits,
+            "trainingSupport": classSupport(splits["training"], names),
+            "validationSupport": classSupport(splits["validation"], names)}
+    selection["commonValidationRecordIds"] = sorted(set.intersection(*(
+        {row["recordId"] for row in task["validation"]} for task in selection["tasks"].values())))
+    return selection
+
+
+def requireDiskSpace(directory, requiredBytes, reserveBytes=2 * 1024 ** 3):
+    directory = Path(directory).resolve()
+    while not directory.exists():
+        directory = directory.parent
+    free = shutil.disk_usage(directory).free
+    if free < requiredBytes + reserveBytes:
+        raise ValueError(f"Insufficient disk space: need {requiredBytes} bytes plus {reserveBytes} reserve; have {free}.")
+    return {"requiredBytes": requiredBytes, "reserveBytes": reserveBytes, "freeBytes": free}
+
+
 def copyRuntimeData(datasetDir, runDir, selection):
     root, runDir = Path(datasetDir).resolve(), Path(runDir).resolve()
+    required = sum(resolveSourcePath(root, row[f"{kind}Path"]).stat().st_size
+                   for task in selection["tasks"].values() for split in ("training", "validation")
+                   for row in task[split] for kind in ("image", "label"))
+    requireDiskSpace(runDir, required)
     evidence = []
     for taskId, task in selection["tasks"].items():
         taskRoot = runDir / "runtimeData" / taskId
