@@ -34,6 +34,7 @@ def main(argv: list[str] | None = None) -> int:
     prepareParser.add_argument("--outputDir", type=Path, required=True)
     verifyParser = commands.add_parser("verifyDataset", help="Verify a portable prepared dataset bundle.")
     verifyParser.add_argument("--datasetDir", type=Path, required=True)
+    verifyParser.add_argument("--receipt", type=Path)
     environmentParser = commands.add_parser("inspectEnvironment", help="Inspect the training device and packages.")
     environmentParser.add_argument("--device", default="cpu")
     environmentParser.add_argument("--outputDir", type=Path, required=True)
@@ -104,11 +105,22 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Training environment ready: {report['ready']}; report: {arguments.outputDir}")
         return 0 if report["ready"] else 1
     if arguments.command == "verifyDataset":
+        from futsal.datasets.datasetFiles import writeJson
         from futsal.datasets.datasetVerify import verifyDataset
+        from futsal.evaluation.evaluationData import validateResearchOutput
+        from futsal.inventory.catalog import hashFile
+        from futsal.training.trainingRun import utcNow
 
         try:
+            if arguments.receipt is not None:
+                receipt = validateResearchOutput(arguments.receipt, [arguments.datasetDir])
             result = verifyDataset(arguments.datasetDir,
                                    progress=lambda message: print(message, flush=True))
+            if arguments.receipt is not None:
+                receipt.parent.mkdir(parents=True, exist_ok=True)
+                writeJson(receipt, {"schemaVersion": 1, "kind": "datasetVerification", "status": "passed",
+                                    "verifiedAt": utcNow(), "contractSha256": hashFile(arguments.datasetDir / "contract.json"),
+                                    "verification": result})
         except (OSError, ValueError) as error:
             parser.exit(2, f"Dataset verification failed: {error}\n")
         print(f"Verified {result['exportedImageCount']} development images; "
