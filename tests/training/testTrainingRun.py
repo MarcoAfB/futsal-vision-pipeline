@@ -106,3 +106,56 @@ def testInvalidBundleFailsBeforeBackendInitialization(trainingBundle, localWeigh
     assert result["status"] == "failed"
     assert result["stages"] == []
     assert "contract" in result["error"]["message"].lower()
+
+
+def testContinuationReusesOnlyVerifiedCompletedPrefix(trainingBundle, localWeights,
+                                                       fakeTraining, tmp_path, monkeypatch):
+    bundle, configPath, _ = trainingBundle
+    previousDir = tmp_path / "interrupted"
+
+    def interruptSecond(config, task, stage, *args):
+        if stage["taskId"] == "roleObjects":
+            raise KeyboardInterrupt()
+        return fakeTraining(config, task, stage, *args)
+
+    monkeypatch.setattr("futsal.training.trainingRun.trainStage", interruptSecond)
+    previous = runTraining(bundle, configPath, localWeights, previousDir, progress=lambda message: None)
+    assert previous["status"] == "interrupted"
+    originalHash = hashFile(previousDir / "run.json")
+    calls = []
+
+    def recordStage(config, task, stage, *args):
+        calls.append(stage["taskId"])
+        return fakeTraining(config, task, stage, *args)
+
+    monkeypatch.setattr("futsal.training.trainingRun.trainStage", recordStage)
+    result = runTraining(bundle, configPath, localWeights, tmp_path / "continued",
+                         progress=lambda message: None, continueFrom=previousDir)
+    assert result["status"] == "completed", result.get("error")
+    assert calls == ["roleObjects", "unified25"]
+    assert result["continuation"]["previousRunSha256"] == originalHash
+    assert result["stages"][0]["reusedFromRunSha256"] == originalHash
+    assert hashFile(previousDir / "run.json") == originalHash
+    calls.clear()
+    changed = runTraining(bundle, configPath, localWeights, tmp_path / "changedSeed",
+                          progress=lambda message: None, seed=43, continueFrom=previousDir)
+    assert changed["status"] == "failed" and calls == []
+    assert "configurationId" in changed["error"]["message"]
+    best = previousDir / previous["stages"][0]["results"]["checkpoints"]["best"]["path"]
+    best.write_bytes(b"modified checkpoint")
+    corrupted = runTraining(bundle, configPath, localWeights, tmp_path / "corruptedPrefix",
+                            progress=lambda message: None, continueFrom=previousDir)
+    assert corrupted["status"] == "failed" and calls == []
+    assert "changed" in corrupted["error"]["message"]
+
+
+def testSeedOverrideSnapshotsSourceAndEffectiveConfiguration(trainingBundle, localWeights,
+                                                            fakeTraining, tmp_path):
+    bundle, configPath, config = trainingBundle
+    first = runTraining(bundle, configPath, localWeights, tmp_path / "seed42", progress=lambda message: None)
+    result = runTraining(bundle, configPath, localWeights, tmp_path / "seed43", progress=lambda message: None, seed=43)
+    assert first["methodId"] == result["methodId"]
+    assert first["configurationId"] != result["configurationId"]
+    assert readJson(tmp_path / "seed43/inputs/resolvedTraining.json")["seed"] == 43
+    assert result["configurationOverrides"] == {"seed": 43}
+    assert config["seed"] == 42

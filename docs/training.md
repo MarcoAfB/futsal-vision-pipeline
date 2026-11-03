@@ -202,3 +202,21 @@ peak CUDA allocated/reserved memory when applicable. Best checkpoint selection
 uses native validation box mAP50:95, including artificial point boxes; native-point
 localization diagnostics remain separate from checkpoint selection. CUDA
 determinism sets CUBLAS_WORKSPACE_CONFIG before loading the backend.
+
+## Seeds and interrupted attempts
+
+`train --seed 43` overrides only the seed. Both the original profile and resolved
+configuration are archived, with a complete configuration ID and a method ID
+that excludes seed and execution device/thread selection. The method ID includes
+the dataset contract and initial checkpoint hash. Repeat the complete curriculum
+in independent directories for each declared seed; changing a directory name
+does not change a seed.
+
+`train --continueFrom <failedRun> --outputDir <newAttempt>` reuses only a verified
+completed stage prefix. Configuration, code commit/source hashes, seed, dataset,
+initial weights, selection and checkpoint chain must agree. Prior input/artifact
+hashes and successful integrity checks are required. The new attempt records its
+parent and copies the completed stage evidence. The next stage restarts at epoch
+zero from its original input with a new optimizer. This does not resume an epoch
+or select metrics across attempts. Original attempts are preserved. Runs created
+before configuration IDs were introduced cannot be continued this way.

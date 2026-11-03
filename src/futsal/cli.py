@@ -40,11 +40,13 @@ def main(argv: list[str] | None = None) -> int:
     weightsParser = commands.add_parser("prepareWeights", help="Obtain official YOLO26 pretrained weights.")
     weightsParser.add_argument("--modelSize", choices=["n", "s", "m", "l", "x"], default="n")
     weightsParser.add_argument("--outputDir", type=Path, required=True)
-    trainParser = commands.add_parser("train", help="Run the audited YOLO26 technical CPU smoke.")
+    trainParser = commands.add_parser("train", help="Run an audited YOLO26 smoke, pilot or scientific curriculum.")
     trainParser.add_argument("--datasetDir", type=Path, required=True)
     trainParser.add_argument("--config", type=Path, default=Path("configs/training/yolo26Smoke.yaml"))
     trainParser.add_argument("--weights", type=Path, required=True)
     trainParser.add_argument("--outputDir", type=Path, required=True)
+    trainParser.add_argument("--seed", type=int)
+    trainParser.add_argument("--continueFrom", type=Path)
     trainParser.add_argument("--evaluationConfig", type=Path, default=Path("configs/evaluation/researchValidation.yaml"))
     from futsal.reporting.researchCli import addResearchCommands
 
@@ -65,7 +67,8 @@ def main(argv: list[str] | None = None) -> int:
 
         try:
             run = runTraining(arguments.datasetDir, arguments.config, arguments.weights,
-                              arguments.outputDir, progress=lambda message: print(message, flush=True))
+                              arguments.outputDir, progress=lambda message: print(message, flush=True),
+                              seed=arguments.seed, continueFrom=arguments.continueFrom)
         except (OSError, ValueError) as error:
             parser.exit(2, f"Training could not start: {error}\n")
         print(f"Training status: {run['status']}; record: {arguments.outputDir / 'run.json'}")

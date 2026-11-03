@@ -6,7 +6,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import futsal
-from futsal.datasets.datasetFiles import readJson, validateNewOutput, verifyEvidence, writeJson
+from futsal.datasets.datasetFiles import (
+    hashJson,
+    readJson,
+    validateNewOutput,
+    verifyEvidence,
+    writeJson,
+)
 from futsal.datasets.datasetVerify import verifyDataset
 from futsal.inventory.catalog import hashFile
 from futsal.inventory.yoloInventory import scanFiles
@@ -14,6 +20,7 @@ from futsal.reporting.report import atomicWrite
 from futsal.training.modelWeights import verifyWeights
 from futsal.training.trainingBackend import initializeBackend, trainStage
 from futsal.training.trainingConfig import loadTrainingConfig
+from futsal.training.trainingContinuation import continueCompletedStages
 from futsal.training.trainingData import copyRuntimeData, selectTrainingData
 from futsal.training.trainingEnvironment import inspectEnvironment
 
@@ -66,6 +73,9 @@ def verifyBundleUnchanged(datasetDir, contract, contractHash):
 def executeStages(config, selection, initialWeights, runDir, run, evidence, progress):
     inputWeights = initialWeights
     for index, stage in enumerate(config["stages"], start=1):
+        if index <= len(run["stages"]) and run["stages"][index - 1]["status"] == "completed":
+            inputWeights = runDir / run["stages"][index - 1]["results"]["checkpoints"]["best"]["path"]
+            continue
         taskId = stage["taskId"]
         stageDir = runDir / "stages" / f"stage{index:02d}{taskId[0].upper()}{taskId[1:]}"
         state = {"taskId": taskId, "status": "running", "startedAt": utcNow(),
@@ -84,7 +94,7 @@ def executeStages(config, selection, initialWeights, runDir, run, evidence, prog
         inputWeights = runDir / result["checkpoints"]["best"]["path"]
 
 
-def runTraining(datasetDir, configPath, weightsPath, outputDir, progress=print):
+def runTraining(datasetDir, configPath, weightsPath, outputDir, progress=print, *, seed=None, continueFrom=None):
     datasetDir, configPath, weightsPath = (Path(path).resolve() for path in
                                            (datasetDir, configPath, weightsPath))
     projectRoot = Path(futsal.__file__).resolve().parents[2]
@@ -92,12 +102,21 @@ def runTraining(datasetDir, configPath, weightsPath, outputDir, progress=print):
                  projectRoot / "pyproject.toml", projectRoot / "uv.lock"]
     runDir = validateNewOutput(outputDir, datasetDir, protected)
     validateNewOutput(runDir, projectRoot.parent / "Python")
+    if continueFrom is not None:
+        validateNewOutput(runDir, continueFrom, [continueFrom])
     config = loadTrainingConfig(configPath, readJson(datasetDir / "plan.json")["recipe"])
+    sourceConfig = dict(config)
+    if seed is not None:
+        if type(seed) is not int or seed < 0:
+            raise ValueError("Seed override must be a nonnegative integer.")
+        config = {**config, "seed": seed}
     weights = verifyWeights(weightsPath, config["modelSize"])
     runDir.mkdir(parents=True, exist_ok=False)
     run = {"schemaVersion": 1, "purpose": config["purpose"], "status": "running",
            "startedAt": utcNow(), "configuration": config, "initialWeights": weights,
            "datasetDirectory": str(datasetDir), "stages": [], "testEvaluated": False}
+    run["configurationId"] = hashJson(config)
+    run["configurationOverrides"] = {} if seed is None else {"seed": seed}
     saveRun(runDir, run)
     contract, contractHash, evidence = None, None, None
     try:
@@ -107,8 +126,9 @@ def runTraining(datasetDir, configPath, weightsPath, outputDir, progress=print):
         for source, name in ((configPath, "training.yaml"), (weightsPath, weightsPath.name),
                              (weightsPath.with_name("weights.json"), "weights.json")):
             shutil.copyfile(source, inputs / name)
-        if loadTrainingConfig(inputs / "training.yaml", readJson(datasetDir / "plan.json")["recipe"]) != config:
+        if loadTrainingConfig(inputs / "training.yaml", readJson(datasetDir / "plan.json")["recipe"]) != sourceConfig:
             raise ValueError("Training configuration changed during input snapshot.")
+        writeJson(inputs / "resolvedTraining.json", config)
         if verifyWeights(inputs / weightsPath.name, config["modelSize"]) != weights:
             raise ValueError("Initial checkpoint changed during input snapshot.")
         run["inputEvidence"] = [fileEvidence(path, runDir) for path in sorted(inputs.iterdir())]
@@ -121,9 +141,16 @@ def runTraining(datasetDir, configPath, weightsPath, outputDir, progress=print):
         contract = readJson(datasetDir / "contract.json")
         contractHash = hashFile(datasetDir / "contract.json")
         run["contractId"] = contract["contractId"]
+        method = {key: value for key, value in config.items() if key not in
+                  {"seed", "device", "evaluationDevice", "numThreads"}}
+        run["methodId"] = hashJson({"configuration": method, "contractId": run["contractId"],
+                                    "initialWeightsSha256": weights["sha256"]})
         selection = selectTrainingData(datasetDir, config)
         evidence = copyRuntimeData(datasetDir, runDir, selection)
         run["selectionSha256"] = hashFile(runDir / "selection.json")
+        if continueFrom is not None:
+            continueCompletedStages(continueFrom, runDir, run)
+            run["inputEvidence"] = [fileEvidence(path, runDir) for path in sorted(inputs.iterdir())]
         saveRun(runDir, run)
         initializeBackend(runDir / "backend", config["numThreads"])
         executeStages(config, selection, inputs / weightsPath.name, runDir, run, evidence, progress)
