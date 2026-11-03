@@ -29,6 +29,9 @@ CUDA tensor execution and the requested device must succeed; there is no CPU
 fallback. Driver/library mismatch stderr is retained in the environment report.
 Installing a CUDA wheel does not fix a mismatched system driver. The reporting
 extra is needed for train's automatic post-training presentation.
+Readiness also rejects a torch/torchvision pair or headless backend version that
+differs from the pinned reference, even if packages are present. The inherited
+CUDA_VISIBLE_DEVICES value is recorded to retain scheduler-visible device mapping.
 
 Ordinary tests stay offline and exclude the trainingIntegration marker. Native
 training tests are explicitly selected with that marker and the training extra.

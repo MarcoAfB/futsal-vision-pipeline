@@ -31,3 +31,13 @@ def testDriverLibraryMismatchIsRetainedAsAGpuReadinessFailure(monkeypatch):
     assert not report["ready"]
     assert "mismatch" in report["nvidiaSmi"]["error"]
     assert any("driver" in finding for finding in report["findings"])
+
+
+def testUnpinnedBackendCannotClaimEnvironmentReadiness(monkeypatch):
+    monkeypatch.setattr("futsal.training.trainingEnvironment.packageVersions", lambda: {
+        "torch": "9.0.0", "torchvision": "0.24.1+cpu", "ultralytics-opencv-headless": "8.4.190",
+        "opencv-python": None})
+    monkeypatch.setattr("futsal.training.trainingEnvironment.shutil.which", lambda name: None)
+    report = inspectEnvironment()
+    assert not report["ready"]
+    assert any("pinned torch/torchvision" in finding for finding in report["findings"])

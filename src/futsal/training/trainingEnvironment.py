@@ -28,6 +28,7 @@ def inspectEnvironment(device="cpu"):
               "libc": list(platform.libc_ver()),
               "freeDiskBytes": shutil.disk_usage(Path.cwd()).free,
               "packages": packageVersions(), "requestedDevice": device, "ready": False,
+              "cudaVisibleDevices": os.environ.get("CUDA_VISIBLE_DEVICES"),
               "cudaAvailable": False, "gpus": [], "findings": []}
     gpuTool = shutil.which("nvidia-smi")
     if gpuTool:
@@ -50,6 +51,12 @@ def inspectEnvironment(device="cpu"):
     if not report["packages"]["torch"]:
         report["findings"].append("Install the optional training extra: uv sync --locked --extra training.")
         return report
+    pairedVision = {"2.9.1+cpu": "0.24.1+cpu", "2.9.1+cu126": "0.24.1+cu126"}
+    versions = report["packages"]
+    if versions["torch"] not in pairedVision or versions.get("torchvision") != pairedVision.get(versions["torch"]):
+        report["findings"].append("Use the pinned torch/torchvision pair from training or trainingGpu; synchronize the locked environment.")
+    if versions.get("ultralytics-opencv-headless") != "8.4.190":
+        report["findings"].append("Use pinned ultralytics-opencv-headless 8.4.190; synchronize the locked environment.")
     try:
         import torch
 
