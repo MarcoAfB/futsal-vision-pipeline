@@ -33,7 +33,7 @@ def loadComponent(runDir, taskId, datasetDir, classes):
     config = run["configuration"]
     if run["status"] != "completed" or run["purpose"] != "scientificTraining" or config.get("sourcePolicy") != "realOnly":
         raise ValueError("Joint evaluation requires completed real-only scientific runs.")
-    if len(run["stages"]) != 1 or run["stages"][0]["taskId"] != taskId or run["stages"][0]["status"] != "completed":
+    if len(config["stages"]) != 1 or config["stages"][0]["taskId"] != taskId or len(run["stages"]) != 1 or run["stages"][0]["taskId"] != taskId or run["stages"][0]["status"] != "completed":
         raise ValueError("Each component must be its own independent single-stage run.")
     if run.get("integrityErrors") or not run.get("runtimeIntegrityAfterRun") or not run.get("bundleIntegrityAfterRun", {}).get("hashesVerified"):
         raise ValueError("Component run has no successful input/runtime integrity record.")
@@ -70,6 +70,8 @@ def configurationInputs(objectsRunDir, courtRunDir, datasetDir, referenceDataset
     fields = ("modelSize", "seed", "device", "evaluationDevice", "parameters", "numThreads")
     if any(first["configuration"][key] != second["configuration"][key] for key in fields) or first["initialWeights"] != second["initialWeights"]:
         raise ValueError("Independent components require identical official initialization and shared protocol.")
+    if first["configuration"]["stages"][0]["epochs"] != second["configuration"]["stages"][0]["epochs"]:
+        raise ValueError("Independent component epoch budgets differ.")
     if first["code"]["commit"] != second["code"]["commit"] or first["code"]["files"] != second["code"]["files"]:
         raise ValueError("Independent component code snapshots differ.")
     common = set.intersection(*({row["recordId"] for row in item["rows"]} for item in components))

@@ -271,3 +271,40 @@ def configurationEvaluation(projectionBundle, tmp_path, monkeypatch):
     state = evaluateConfiguration(*runs, data, parent, "configs/evaluation/researchValidation.yaml", output, progress=lambda message: None)
     assert state["status"] == "completed", state.get("error")
     return output, runs, data, parent, state
+
+
+@pytest.fixture
+def comparisonEvaluations(configurationEvaluation, tmp_path):
+    import shutil
+
+    from futsal.datasets.datasetFiles import hashJson, writeJson
+    from futsal.evaluation.evaluationRun import sealEvaluation
+    from futsal.inventory.catalog import hashFile
+    from futsal.training.trainingData import selectTrainingData
+
+    candidate, _, _, parent, state = configurationEvaluation
+    baseline = tmp_path / "baseline"
+    (baseline / "evidence").mkdir(parents=True)
+    shutil.copytree(candidate / "evidence/joint", baseline / "evidence/unified25")
+    shutil.copytree(candidate / "evidence/exampleImages", baseline / "evidence/exampleImages")
+    config = yaml.safe_load(Path("configs/training/yolo26Curriculum.yaml").read_text(encoding="utf-8"))
+    config.update(device="cpu", evaluationDevice="cpu")
+    training = copy.deepcopy(state["components"][0]["run"])
+    training.update(configuration=config, configurationId=hashJson(config))
+    training["stages"] = [{"taskId": stage["taskId"], "status": "completed"} for stage in config["stages"]]
+    writeJson(baseline / "evidence/trainingSelection.json", selectTrainingData(parent, config))
+    training["selectionSha256"] = hashFile(baseline / "evidence/trainingSelection.json")
+    training["contractId"] = state["referenceContractId"]
+    checkpoint = {"sha256": "1" * 64, "names": state["classes"], "classCount": 25, "end2end": True}
+    training["stages"][-1]["results"] = {"checkpoints": {"best": checkpoint}}
+    writeJson(baseline / "evidence/trainingRun.json", training)
+    names = state["classes"]
+    evaluation = {"schemaVersion": 1, "status": "completed", "purpose": "scientificTraining", "training": training,
+        "selection": "runValidation", "protocol": state["protocol"], "protocolId": state["protocolId"],
+        "contractId": state["referenceContractId"], "testEvaluated": False, "pointClasses": state["pointClasses"],
+        "trainingRunSha256": hashFile(baseline / "evidence/trainingRun.json"),
+        "stages": [{"taskId": "unified25", "classes": names, "status": "completed",
+                    "recordIds": state["recordIds"], "checkpoint": checkpoint,
+                    "evidenceDirectory": "evidence/unified25", "examples": state["examples"]}]}
+    sealEvaluation(baseline, evaluation)
+    return baseline, candidate

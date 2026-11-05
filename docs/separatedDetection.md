@@ -79,3 +79,27 @@ Its report focuses on group/class support, native-point success/error and a few
 deterministic examples. Rendering/regeneration through reportRun needs no model
 packages. Individual task reports still use all541/548 validation records. Runtime
 and bundle hashes are checked after evaluation; partial failures remain explicit.
+
+## Comparing sealed quality results
+
+Import the completed scientific curriculum with resultTransfer before comparing:
+its run inputs/artifacts, final checkpoint, selection and evaluation seals must be
+verified. A user-reported completion is distinct from locally verified artifacts.
+
+`compareConfigurations --baselineEvaluationDir <curriculumEvaluation>
+--candidateEvaluationDir <jointEvaluation> --outputDir <newComparison>` compares
+only completed scientific evaluations with identical reference contract, canonical
+references/record order, protocol, seed, model scale, resolution and precision.
+Wrong/missing input, unsupported support changes and corrupted seals are refused.
+It reads sealed metrics/native masks without importing a model or running inference.
+
+The report shows absolute candidate-minus-baseline differences for ball, athletes,
+court detection and native-point success/error/missing counts. Detailed CSVs and a
+few paired examples from the sealed galleries retain N/A support and exact inputs.
+The two source evaluations are archived and sealed inside the comparison, allowing
+standalone reportRun regeneration with reporting dependencies only.
+
+Detector partition, public curriculum exposure and task-eligible training records
+differ. This is a comparison of complete configurations, not an isolated curriculum
+ablation or a statistically established winner. No FPS, latency, inference-memory
+benchmark or final test is added. Single-seed results remain explicitly labelled.
