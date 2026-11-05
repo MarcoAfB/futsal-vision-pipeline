@@ -152,9 +152,7 @@ def validateExportSummary(plan, rows):
         for split in ("training", "validation"):
             selected = [row for row in rows if row["taskId"] == task["taskId"] and row["split"] == split]
             counts = Counter(target["classId"] for row in selected for target in row["targets"])
-            allowedMissing = set(plan["recipe"]["unsupportedValidationClasses"]) if (
-                split == "validation" and task["taskId"] == plan["recipe"]["coverageTask"]
-            ) else set()
+            allowedMissing = set(plan["recipe"]["unsupportedValidationClasses"]) & set(task["classes"]) if split == "validation" else set()
             missing = {name for index, name in enumerate(task["classes"]) if not counts[index]}
             if not selected or missing != allowedMissing:
                 raise ValueError(f"Exported {task['taskId']} {split} has insufficient class support.")
