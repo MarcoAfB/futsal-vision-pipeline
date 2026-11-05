@@ -325,6 +325,10 @@ def updateReportIndex(root):
 def renderReport(evaluationDir, outputDir=None):
     source = Path(evaluationDir).resolve()
     state, contract = verifyEvaluation(source)
+    if state.get("kind") == "configurationEvaluation":
+        from futsal.reporting.configurationReport import renderConfigurationReport
+
+        return renderConfigurationReport(source, outputDir)
     inputRoots = [source, *[Path(value) for value in
                   (state.get("trainingDirectory"), state["training"].get("datasetDirectory")) if value]]
     root = source if outputDir is None else validateResearchOutput(outputDir, inputRoots)

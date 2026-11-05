@@ -5,6 +5,11 @@ from futsal.datasets.datasetFiles import readJson, writeJson
 
 
 def addResearchCommands(commands):
+    configuration = commands.add_parser("evaluateConfiguration", help="Evaluate independent object/court checkpoints jointly.")
+    for name in ("objectsRunDir", "courtRunDir", "datasetDir", "referenceDatasetDir", "outputDir"):
+        configuration.add_argument(f"--{name}", type=Path, required=True)
+    configuration.add_argument("--config", type=Path, default=Path("configs/evaluation/researchValidation.yaml"))
+    configuration.add_argument("--workRoot", type=Path)
     evaluate = commands.add_parser("evaluateRun", help="Evaluate archived best checkpoints on own validation data.")
     evaluate.add_argument("--runDir", type=Path, required=True)
     evaluate.add_argument("--datasetDir", type=Path, required=True)
@@ -23,6 +28,15 @@ def handleResearchCommand(arguments):
     from futsal.evaluation.evaluationRun import evaluateRun
     from futsal.reporting.researchReport import renderReport, renderTrainingReport
 
+    if arguments.command == "evaluateConfiguration":
+        from futsal.evaluation.configurationRun import evaluateConfiguration
+
+        result = evaluateConfiguration(arguments.objectsRunDir, arguments.courtRunDir, arguments.datasetDir,
+            arguments.referenceDatasetDir, arguments.config, arguments.outputDir,
+            progress=lambda message: print(message, flush=True), workRoot=arguments.workRoot)
+        path = renderReport(arguments.outputDir)
+        print(f"Configuration evaluation: {result['status']}; report: {path}")
+        return 0 if result["status"] == "completed" else 1
     if arguments.command == "reportRun":
         path = (renderReport(arguments.evaluationDir, arguments.outputDir) if arguments.evaluationDir else
                 renderTrainingReport(arguments.runDir, arguments.outputDir))

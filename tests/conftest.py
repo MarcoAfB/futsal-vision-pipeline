@@ -215,3 +215,59 @@ def projectionBundle(trainingBundle, preparedSources):
     projection = directory.parent / "projection"
     prepareProjection(parent, projectedRecipe, dataRoot, projection, progress=lambda message: None)
     return parent, projection, projectedRecipe, dataRoot
+
+
+@pytest.fixture
+def configurationEvaluation(projectionBundle, tmp_path, monkeypatch):
+    import shutil
+    from collections import Counter
+
+    from futsal.datasets.datasetFiles import writeJson
+    from futsal.datasets.datasetProjection import materializeProjection
+    from futsal.evaluation.configurationRun import evaluateConfiguration
+    from futsal.training.modelWeights import prepareWeights
+    from futsal.training.trainingRun import fileEvidence, runTraining
+
+    parent, projection, _, _ = projectionBundle
+    data = tmp_path / "projected"
+    materializeProjection(parent, projection, data, progress=lambda message: None)
+    monkeypatch.setattr("futsal.training.modelWeights.downloadWeights", lambda url, path: path.write_bytes(b"isolated fixture"))
+    prepareWeights("n", tmp_path / "initial")
+    monkeypatch.setattr("futsal.training.trainingRun.inspectEnvironment", lambda device: {"ready": True})
+    monkeypatch.setattr("futsal.training.trainingRun.initializeBackend", lambda *args: None)
+
+    def train(config, task, stage, weights, stageDir, runDir, evidence):
+        stageDir.mkdir(parents=True)
+        target = stageDir / "best.pt"
+        shutil.copyfile(weights, target)
+        return {"checkpoints": {"best": fileEvidence(target, runDir)}, "losses": {"fixture": 0.0}}
+
+    monkeypatch.setattr("futsal.training.trainingRun.trainStage", train)
+    runs = []
+    for taskId in ("detailedObjects", "courtPoints"):
+        config = yaml.safe_load(Path(f"configs/training/{taskId}.yaml").read_text(encoding="utf-8"))
+        config.update(device="cpu", evaluationDevice="cpu")
+        configFile = tmp_path / f"{taskId}.yaml"
+        configFile.write_text(yaml.safe_dump(config), encoding="utf-8")
+        runDir = tmp_path / taskId
+        assert runTraining(data, configFile, tmp_path / "initial/yolo26n.pt", runDir, progress=lambda message: None)["status"] == "completed"
+        runs.append(runDir)
+    monkeypatch.setattr("futsal.evaluation.configurationRun.initializeBackend", lambda *args: None)
+
+    def predict(components, task, references, trainingConfig, config, workDir):
+        for name in ("configurationArguments.json", "configurationLoaderAudit.json"):
+            writeJson(workDir / name, {})
+        return [{"recordId": row["recordId"], "dimensions": row["dimensions"], "nativeOrder": i,
+                 "correctAtIou": [], "detections": []} for i, row in enumerate(references)], {}
+
+    def averagePrecision(references, predictions, names, config):
+        support = Counter(target["className"] for row in references for target in row["targets"])
+        return {"perClass": {name: {"ap50": 0.0 if support[name] else None, "ap50To95": 0.0 if support[name] else None}
+                              for name in names}, "prCurves": {}, "matches": []}
+
+    monkeypatch.setattr("futsal.evaluation.configurationRun.predictConfiguration", predict)
+    monkeypatch.setattr("futsal.evaluation.evaluationMetrics.nativeAveragePrecision", averagePrecision)
+    output = tmp_path / "configuration"
+    state = evaluateConfiguration(*runs, data, parent, "configs/evaluation/researchValidation.yaml", output, progress=lambda message: None)
+    assert state["status"] == "completed", state.get("error")
+    return output, runs, data, parent, state

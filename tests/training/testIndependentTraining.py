@@ -59,3 +59,25 @@ def testNativeIndependentModelsStartFromSameOfficialInput(projectionBundle, tmp_
         assert stage["results"]["training"]["completedEpochs"] == 2
         assert readJson(runDir / stage["directory"] / "optimizer.json")["initialStateEntries"] == 0
     assert hashFile(weights) == original
+    from futsal.evaluation.configurationRun import evaluateConfiguration
+    from futsal.reporting.researchReport import renderReport
+
+    output = tmp_path / "joint"
+    state = evaluateConfiguration(tmp_path / "detailedObjects", tmp_path / "courtPoints", bundle, parent,
+                                  "configs/evaluation/researchValidation.yaml", output, progress=lambda message: None)
+    assert state["status"] == "completed", state.get("error")
+    assert len(state["recordIds"]) == 2
+    detection = readJson(output / "evidence/joint/detection.json")
+    assert detection["groups"]["all"]["ap50To95"] == pytest.approx(state["nativeValidationMetrics"]["metrics/mAP50-95(B)"], abs=1e-12)
+    assert next(row for row in detection["perClass"] if row["className"] == "lowerCornerSideB")["ap50To95"] is None
+    points = readJson(output / "evidence/joint/points.json")
+    assert next(row for row in points["perClass"] if row["className"] == "lowerCornerSideB")["successRates"]["0.01"] is None
+    assert renderReport(output).is_file()
+    before = hashFile(output / "evaluationContract.json")
+    import sys
+
+    monkeypatch.setitem(sys.modules, "torch", None)
+    monkeypatch.setitem(sys.modules, "ultralytics", None)
+    text = renderReport(output, tmp_path / "regenerated").read_text(encoding="utf-8")
+    assert "Two independent detectors" in text and "N/A" in text
+    assert hashFile(output / "evaluationContract.json") == before

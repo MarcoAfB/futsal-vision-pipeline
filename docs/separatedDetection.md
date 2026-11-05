@@ -57,3 +57,25 @@ Each run archives its own input weights, source/resolved profile, seed, environm
 effective parameters, epochs, best/last checkpoints and task-specific validation.
 Standalone evaluation/reporting preserves the existing full per-task cohorts and
 native point N/A semantics. Single-stage reports identify independent training.
+
+## Joint validation
+
+`evaluateConfiguration --objectsRunDir <objects> --courtRunDir <court> --datasetDir
+<projectedDataset> --referenceDatasetDir <curriculumDataset> --outputDir <newEvaluation>`
+verifies both completed scientific single-stage runs, their official initialization,
+code/configuration compatibility, full selections and parent dataset lineage.
+`--config` selects the frozen research validation protocol; `--workRoot` controls
+the isolated runtime copies. Requested GPU failure never falls back to CPU.
+
+Both models see the same canonical validation images (539 real records common to
+the three views). Outputs are mapped by class name, stably ordered by confidence
+(objects then court for ties), capped globally at300 and matched by the native
+validator in letterboxed input coordinates after composition. Original-pixel
+predictions retain component provenance. Per-component AP values are not averaged
+or concatenated to manufacture the system score. Native masks/order are archived.
+
+The joint seal binds both run/checkpoint hashes and exact canonical references.
+Its report focuses on group/class support, native-point success/error and a few
+deterministic examples. Rendering/regeneration through reportRun needs no model
+packages. Individual task reports still use all541/548 validation records. Runtime
+and bundle hashes are checked after evaluation; partial failures remain explicit.
