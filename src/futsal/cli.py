@@ -35,6 +35,15 @@ def main(argv: list[str] | None = None) -> int:
     verifyParser = commands.add_parser("verifyDataset", help="Verify a portable prepared dataset bundle.")
     verifyParser.add_argument("--datasetDir", type=Path, required=True)
     verifyParser.add_argument("--receipt", type=Path)
+    projectionParser = commands.add_parser("prepareProjection", help="Prepare native task labels and missing development images.")
+    projectionParser.add_argument("--sourceDatasetDir", type=Path, required=True)
+    projectionParser.add_argument("--config", type=Path, default=Path("configs/separatedDetection.yaml"))
+    projectionParser.add_argument("--dataRoot", type=Path, required=True)
+    projectionParser.add_argument("--outputDir", type=Path, required=True)
+    materializeParser = commands.add_parser("materializeProjection", help="Materialize a verified task projection from its parent and supplement.")
+    materializeParser.add_argument("--sourceDatasetDir", type=Path, required=True)
+    materializeParser.add_argument("--projectionDir", type=Path, required=True)
+    materializeParser.add_argument("--outputDir", type=Path, required=True)
     environmentParser = commands.add_parser("inspectEnvironment", help="Inspect the training device and packages.")
     environmentParser.add_argument("--device", default="cpu")
     environmentParser.add_argument("--outputDir", type=Path, required=True)
@@ -58,6 +67,24 @@ def main(argv: list[str] | None = None) -> int:
     if arguments.command is None:
         parser.print_help()
         return 0
+    if arguments.command in {"prepareProjection", "materializeProjection"}:
+        from futsal.datasets.datasetProjection import materializeProjection, prepareProjection
+
+        try:
+            def progress(message):
+                print(message, flush=True)
+            if arguments.command == "prepareProjection":
+                result = prepareProjection(arguments.sourceDatasetDir, arguments.config,
+                                           arguments.dataRoot, arguments.outputDir, progress=progress)
+                print(f"Projection: {result['projectionId']}; supplement records: "
+                      f"{sum(item['provider'] == 'supplement' for item in result['imageSources'].values())}")
+            else:
+                result = materializeProjection(arguments.sourceDatasetDir, arguments.projectionDir,
+                                               arguments.outputDir, progress=progress)
+                print(f"Materialized dataset contract: {result['contractId']}")
+            return 0
+        except (OSError, ValueError, KeyError) as error:
+            parser.exit(2, f"Projection could not complete: {error}\n")
     if arguments.command in {"evaluateRun", "reportRun"}:
         from futsal.reporting.researchCli import handleResearchCommand
 

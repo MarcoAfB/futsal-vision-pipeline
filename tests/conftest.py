@@ -190,3 +190,28 @@ def trainingBundle(preparedSources):
     configFile.write_text(yaml.safe_dump(configuration))
     config = loadTrainingConfig(configFile, plan["recipe"])
     return bundle, configFile, config
+
+
+@pytest.fixture
+def projectionBundle(trainingBundle, preparedSources):
+    from futsal.datasets.datasetExport import prepareDataset
+    from futsal.datasets.datasetPlan import buildDatasetPlan, writeDatasetPlan
+    from futsal.datasets.datasetProjection import prepareProjection
+
+    dataRoot, recipeFile, directory = preparedSources
+    for name in ("video0.xml", "video2.xml"):
+        annotation = dataRoot / name
+        tree = ElementTree.parse(annotation)
+        tree.getroot().find("track/points").set("points", "500,30")
+        tree.write(annotation, encoding="utf-8")
+    plan = buildDatasetPlan(recipeFile, dataRoot)
+    planPath = writeDatasetPlan(plan, directory.parent / "projectionParentPlan", dataRoot)
+    parent = directory.parent / "projectionParent"
+    prepareDataset(planPath, dataRoot, parent, progress=lambda message: None)
+    recipe = yaml.safe_load(Path("configs/separatedDetection.yaml").read_text(encoding="utf-8"))
+    recipe.pop("splitPath")
+    projectedRecipe = recipeFile.with_name("separated.yaml")
+    projectedRecipe.write_text(yaml.safe_dump(recipe), encoding="utf-8")
+    projection = directory.parent / "projection"
+    prepareProjection(parent, projectedRecipe, dataRoot, projection, progress=lambda message: None)
+    return parent, projection, projectedRecipe, dataRoot

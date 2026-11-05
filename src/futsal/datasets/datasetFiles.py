@@ -1,7 +1,7 @@
 import hashlib
 import json
 import shutil
-import tempfile
+import uuid
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -44,7 +44,8 @@ def validateNewOutput(outputDir, sourceRoot, protectedPaths=()):
 def stagedDirectory(outputDir, sourceRoot, protectedPaths=()):
     outputDir = validateNewOutput(outputDir, sourceRoot, protectedPaths)
     outputDir.parent.mkdir(parents=True, exist_ok=True)
-    staging = Path(tempfile.mkdtemp(prefix=f".{outputDir.name}.", dir=outputDir.parent))
+    staging = outputDir.parent / f".partial-{uuid.uuid4().hex[:8]}"
+    staging.mkdir()
     try:
         yield staging
         if outputDir.exists():
