@@ -233,6 +233,9 @@ def stageMarkdown(root, state, stage):
 def reportMarkdown(root, state):
     config = state["protocol"]
     trainingCode, evaluationCode = state["training"].get("code", {}), state.get("code", {})
+    independent = len(state["training"].get("configuration", {}).get("stages", [])) == 1
+    taskContext = ("One detector is trained independently on its declared task. " if independent else
+                   "Each curriculum stage is a different task. Stage scores are not a ranking or evidence that the curriculum improves performance. ")
     interpretation = {"technicalSmoke": "This technical smoke does not estimate scientific model quality.",
                       "scientificPilot": "This resource/execution pilot does not establish scientific model quality.",
                       "scientificTraining": "This is a single-seed validation result. Repetitions and controlled comparisons are required for comparative conclusions."}.get(state["purpose"], "Interpret results within the declared run purpose.")
@@ -242,8 +245,7 @@ def reportMarkdown(root, state):
              *markdownTable(["Training command elapsed (s)", "Research evaluation elapsed (s)"],
                             [[elapsedSeconds(state["training"]), elapsedSeconds(state)]]),
              "Elapsed times include integrity verification and processing overhead; they are not inference benchmarks.", "",
-             "Each curriculum stage is a different task. Stage scores are not a ranking or evidence that "
-             f"the curriculum improves performance. {interpretation}", "",
+             f"{taskContext}{interpretation}", "",
              "## Reading guide", "", *[f"- [{stage['taskId']}](#{stage['taskId'].lower()})" for stage in state["stages"]], "",
              "## Protocol and provenance", "",
              f"Confidence floor: {config['confidenceFloor']:g}; operational confidence >= {config['operationalConfidence']:g}; "
@@ -261,7 +263,7 @@ def reportMarkdown(root, state):
              "experiment comparison, inferential significance test or hardware performance benchmark is performed.", ""]
     trainingConfig = state["training"].get("configuration", {})
     if trainingConfig.get("schemaVersion") == 2:
-        lines += ["### Curriculum execution", "",
+        lines += ["### Training execution" if independent else "### Curriculum execution", "",
                   f"Seed: {trainingConfig['seed']}; source policy: {trainingConfig['sourcePolicy']}; "
                   f"evaluation device: {state.get('requestedDevice', 'cpu')}; "
                   f"physical batch: {trainingConfig['parameters']['batch']}; nominal batch: {trainingConfig['parameters']['nbs']}.", "",

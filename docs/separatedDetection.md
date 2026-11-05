@@ -40,3 +40,20 @@ supplement and runs complete native-label/image verification before publication.
 The new bundle is self-contained and compatible with existing training/transport.
 Original bundles and raw sources remain unchanged. Destinations must be new;
 corruption, another parent, missing/extra files or insufficient space fail explicitly.
+
+## Independent training
+
+Use the existing train CLI twice, sequentially, with the same official YOLO26n
+checkpoint and sidecar. `configs/training/detailedObjects.yaml` and
+`configs/training/courtPoints.yaml` each contain exactly one training stage.
+The initial protocol is seed42, image960, physical batch2/nbs64, FP32 SGD,
+LR0.001, momentum0.937, weight decay0.0005, warmup3, linear final LR fraction0.01,
+100 maximum epochs and patience20. Workers2, cache and all augmentations disabled.
+There is no mandatory pilot or checkpoint transfer between these two executions.
+Independent native CPU fixture training verifies5/20-class checkpoints, the common
+initial SHA, fresh optimizer state and preserved native labels/loaders offline.
+
+Each run archives its own input weights, source/resolved profile, seed, environment,
+effective parameters, epochs, best/last checkpoints and task-specific validation.
+Standalone evaluation/reporting preserves the existing full per-task cohorts and
+native point N/A semantics. Single-stage reports identify independent training.
