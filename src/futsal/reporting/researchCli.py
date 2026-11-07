@@ -16,6 +16,7 @@ def addResearchCommands(commands):
         configuration.add_argument(f"--{name}", type=Path, required=True)
     configuration.add_argument("--config", type=Path, default=Path("configs/evaluation/researchValidation.yaml"))
     configuration.add_argument("--workRoot", type=Path)
+    configuration.add_argument("--mediaStoreDir", type=Path)
     evaluate = commands.add_parser("evaluateRun", help="Evaluate archived best checkpoints on own validation data.")
     evaluate.add_argument("--runDir", type=Path, required=True)
     evaluate.add_argument("--datasetDir", type=Path, required=True)
@@ -23,6 +24,7 @@ def addResearchCommands(commands):
     evaluate.add_argument("--config", type=Path, default=Path("configs/evaluation/researchValidation.yaml"))
     evaluate.add_argument("--outputDir", type=Path, required=True)
     evaluate.add_argument("--workRoot", type=Path)
+    evaluate.add_argument("--mediaStoreDir", type=Path)
     report = commands.add_parser("reportRun", help="Render archived evaluation or training evidence without inference.")
     source = report.add_mutually_exclusive_group(required=True)
     source.add_argument("--evaluationDir", type=Path)
@@ -53,7 +55,8 @@ def handleResearchCommand(arguments):
 
         result = evaluateConfiguration(arguments.objectsRunDir, arguments.courtRunDir, arguments.datasetDir,
             arguments.referenceDatasetDir, arguments.config, arguments.outputDir,
-            progress=lambda message: print(message, flush=True), workRoot=arguments.workRoot)
+            progress=lambda message: print(message, flush=True), workRoot=arguments.workRoot,
+            mediaStoreDir=arguments.mediaStoreDir)
         path = renderReport(arguments.outputDir)
         print(f"Configuration evaluation: {result['status']}; report: {path}")
         return 0 if result["status"] == "completed" else 1
@@ -64,13 +67,14 @@ def handleResearchCommand(arguments):
         return 0
     result = evaluateRun(arguments.runDir, arguments.datasetDir, arguments.config,
                          arguments.selection, arguments.outputDir,
-                         progress=lambda message: print(message, flush=True), workRoot=arguments.workRoot)
+                         progress=lambda message: print(message, flush=True), workRoot=arguments.workRoot,
+                         mediaStoreDir=arguments.mediaStoreDir)
     path = renderReport(arguments.outputDir)
     print(f"Evaluation status: {result['status']}; report: {path}")
     return 0 if result["status"] == "completed" else 1
 
 
-def generateRunReport(runDir, datasetDir, configPath, reportRoot=None, workRoot=None):
+def generateRunReport(runDir, datasetDir, configPath, reportRoot=None, workRoot=None, mediaStoreDir=None):
     from futsal.evaluation.evaluationData import validateResearchOutput
     from futsal.evaluation.evaluationRun import evaluateRun, newEvaluationPath
     from futsal.reporting.researchReport import (
@@ -88,7 +92,8 @@ def generateRunReport(runDir, datasetDir, configPath, reportRoot=None, workRoot=
     try:
         if run["status"] == "completed":
             result = evaluateRun(runDir, datasetDir, configPath, "runValidation", output,
-                                 progress=lambda message: print(message, flush=True), workRoot=workRoot)
+                                 progress=lambda message: print(message, flush=True), workRoot=workRoot,
+                                 mediaStoreDir=mediaStoreDir)
             path = renderReport(output)
             return result["status"] == "completed", path
         return False, renderTrainingReport(runDir, output)

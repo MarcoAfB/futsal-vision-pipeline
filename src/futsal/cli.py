@@ -42,6 +42,7 @@ def main(argv: list[str] | None = None) -> int:
     verifyParser = commands.add_parser("verifyDataset", help="Verify a portable prepared dataset bundle.")
     verifyParser.add_argument("--datasetDir", type=Path, required=True)
     verifyParser.add_argument("--receipt", type=Path)
+    verifyParser.add_argument("--mediaStoreDir", type=Path)
     projectionParser = commands.add_parser("prepareProjection", help="Prepare native task labels and missing development images.")
     projectionParser.add_argument("--sourceDatasetDir", type=Path, required=True)
     projectionParser.add_argument("--config", type=Path, default=Path("configs/separatedDetection.yaml"))
@@ -65,16 +66,30 @@ def main(argv: list[str] | None = None) -> int:
     trainParser.add_argument("--seed", type=int)
     trainParser.add_argument("--continueFrom", type=Path)
     trainParser.add_argument("--syntheticDir", type=Path, help="Previously generated court training supplement.")
+    trainParser.add_argument("--mediaStoreDir", type=Path)
     trainParser.add_argument("--reportRoot", type=Path)
     trainParser.add_argument("--workRoot", type=Path)
     trainParser.add_argument("--evaluationConfig", type=Path, default=Path("configs/evaluation/researchValidation.yaml"))
+    from futsal.datasets.sharedCli import addSharedCommands
     from futsal.reporting.researchCli import addResearchCommands
 
     addResearchCommands(commands)
+    addSharedCommands(commands)
     arguments = parser.parse_args(argv)
     if arguments.command is None:
         parser.print_help()
         return 0
+    if arguments.command in {"registerMedia", "prepareView", "mediaInventory", "rebindMedia"}:
+        import json
+
+        from futsal.datasets.sharedCli import handleSharedCommand
+
+        try:
+            result = handleSharedCommand(arguments)
+            print(json.dumps(result, sort_keys=True))
+            return 0
+        except (OSError, ValueError, KeyError) as error:
+            parser.exit(2, f"Shared data operation could not complete: {error}\n")
     if arguments.command in {"importRawSources", "verifyRawSources"}:
         from futsal.datasets.rawSources import importRawSources, verifyRawSources
         from futsal.inventory.catalog import loadCatalog
@@ -131,7 +146,7 @@ def main(argv: list[str] | None = None) -> int:
             run = runTraining(arguments.datasetDir, arguments.config, arguments.weights,
                               arguments.outputDir, progress=lambda message: print(message, flush=True),
                               seed=arguments.seed, continueFrom=arguments.continueFrom,
-                              syntheticDir=arguments.syntheticDir)
+                              syntheticDir=arguments.syntheticDir, mediaStoreDir=arguments.mediaStoreDir)
         except (OSError, ValueError) as error:
             parser.exit(2, f"Training could not start: {error}\n")
         print(f"Training status: {run['status']}; record: {arguments.outputDir / 'run.json'}")
@@ -139,7 +154,8 @@ def main(argv: list[str] | None = None) -> int:
 
         try:
             complete, path = generateRunReport(arguments.outputDir, arguments.datasetDir, arguments.evaluationConfig,
-                                               reportRoot=arguments.reportRoot, workRoot=arguments.workRoot)
+                                               reportRoot=arguments.reportRoot, workRoot=arguments.workRoot,
+                                               mediaStoreDir=arguments.mediaStoreDir)
         except (OSError, ValueError, ImportError) as error:
             print(f"Research report could not start: {error}")
             return 1
@@ -174,7 +190,7 @@ def main(argv: list[str] | None = None) -> int:
         try:
             if arguments.receipt is not None:
                 receipt = validateResearchOutput(arguments.receipt, [arguments.datasetDir])
-            result = verifyDataset(arguments.datasetDir,
+            result = verifyDataset(arguments.datasetDir, mediaStoreDir=arguments.mediaStoreDir,
                                    progress=lambda message: print(message, flush=True))
             if arguments.receipt is not None:
                 receipt.parent.mkdir(parents=True, exist_ok=True)
