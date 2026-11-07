@@ -1,0 +1,39 @@
+schemaVersion: 1
+count: 2000
+seed: 42
+width: 1280
+height: 720
+textureScale: 48
+debugCount: 16
+minJpegQuality: 84
+maxJpegQuality: 96
+maxCameraAttempts: 300
+maxSampleAttempts: 80
+geometry:
+  length: 40.0
+  width: 20.0
+  goalWidth: 3.0
+  penaltyDistance: 6.0
+  secondPenaltyDistance: 10.0
+  centerCircleRadius: 3.0
+  references:
+    upperCornerSideA: [0.0, 0.0]
+    lowerCornerSideA: [0.0, 20.0]
+    upperGoalpostSideA: [0.0, 8.5]
+    lowerGoalpostSideA: [0.0, 11.5]
+    penaltyMarkSideA: [6.0, 10.0]
+    secondPenaltyMarkSideA: [10.0, 10.0]
+    upperCenterCourtPoint: [20.0, 0.0]
+    lowerCenterCourtPoint: [20.0, 20.0]
+    upperHalfwayLinePoint: [20.0, 7.0]
+    lowerHalfwayLinePoint: [20.0, 13.0]
+    substitutionPoint1: [10.0, 20.0]
+    substitutionPoint2: [15.0, 20.0]
+    substitutionPoint3: [25.0, 20.0]
+    substitutionPoint4: [30.0, 20.0]
+    upperCornerSideB: [40.0, 0.0]
+    lowerCornerSideB: [40.0, 20.0]
+    upperGoalpostSideB: [40.0, 8.5]
+    lowerGoalpostSideB: [40.0, 11.5]
+    penaltyMarkSideB: [34.0, 10.0]
+    secondPenaltyMarkSideB: [30.0, 10.0]
