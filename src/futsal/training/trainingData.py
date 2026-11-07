@@ -37,13 +37,22 @@ def selectRows(rows, count, seed, namespace, requiredClasses=None):
     return chosen + remaining[:count - len(chosen)]
 
 
-def selectTrainingData(datasetDir, config):
+def selectTrainingData(datasetDir, config, syntheticSnapshot=None):
+    if config.get("schemaVersion") != 2 and syntheticSnapshot is not None:
+        raise ValueError("Technical smoke training refuses synthetic supplementation.")
     root = Path(datasetDir)
     plan, manifest = readJson(root / "plan.json"), readJson(root / "manifest.json")
     taskIds = [stage["taskId"] for stage in config["stages"]]
     tasks = [task for task in activeTasks(plan["recipe"]) if task["taskId"] in taskIds]
     if config.get("schemaVersion") == 2:
-        return selectFullData(plan, manifest, tasks, config)
+        selection = selectFullData(plan, manifest, tasks, config)
+        if config.get("sourcePolicy") == "realWithSyntheticCourt":
+            from futsal.training.syntheticTraining import supplementSelection
+
+            return supplementSelection(selection, config, syntheticSnapshot)
+        if config.get("sourcePolicy") != "realOnly" or syntheticSnapshot is not None:
+            raise ValueError("realOnly training refuses a synthetic supplement or unknown source policy.")
+        return selection
     rows = {task["taskId"]: {split: [row for row in manifest["samples"]
             if row["taskId"] == task["taskId"] and row["split"] == split]
             for split in ("training", "validation")} for task in tasks}
@@ -136,9 +145,17 @@ def requireDiskSpace(directory, requiredBytes, reserveBytes=2 * 1024 ** 3):
     return {"requiredBytes": requiredBytes, "reserveBytes": reserveBytes, "freeBytes": free}
 
 
-def copyRuntimeData(datasetDir, runDir, selection):
+def copyRuntimeData(datasetDir, runDir, selection, *, syntheticDir=None):
     root, runDir = Path(datasetDir).resolve(), Path(runDir).resolve()
-    required = sum(resolveSourcePath(root, row[f"{kind}Path"]).stat().st_size
+
+    def sourcePath(row, kind):
+        if row.get("origin") == "synthetic":
+            if syntheticDir is None or row["taskId"] != "courtPoints" or row["split"] != "training":
+                raise ValueError("Synthetic runtime data require a court training source directory.")
+            return resolveSourcePath(Path(syntheticDir), row[f"{kind}Path"].removeprefix("courtPoints/"))
+        return resolveSourcePath(root, row[f"{kind}Path"])
+
+    required = sum(sourcePath(row, kind).stat().st_size
                    for task in selection["tasks"].values() for split in ("training", "validation")
                    for row in task[split] for kind in ("image", "label"))
     requireDiskSpace(runDir, required)
@@ -149,7 +166,7 @@ def copyRuntimeData(datasetDir, runDir, selection):
             for row in task[split]:
                 for kind in ("image", "label"):
                     relative = row[f"{kind}Path"]
-                    source = resolveSourcePath(root, relative)
+                    source = sourcePath(row, kind)
                     expected = row[f"{kind}Sha256"]
                     if hashFile(source) != expected:
                         raise ValueError(f"Prepared data changed before runtime copy: {relative}.")
