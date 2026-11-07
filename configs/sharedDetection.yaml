@@ -1,0 +1,123 @@
+schemaVersion: 1
+catalogPath: dataSources.yaml
+splitPath: splits.yaml
+curriculum:
+- detailedObjects
+- genericObjects
+- playerOnly
+- ballOnly
+- courtPoints
+coverageTask: unified25
+unsupportedValidationClasses:
+- lowerCornerSideB
+rareClass: lowerCornerSideB
+pointBoxes:
+  widthFraction: 0.015625
+  heightFraction: 0.027777777777777776
+publicValidation:
+  basis: researcherConfirmation
+  confirmedOn: '2026-10-26'
+  checks:
+  - annotationCompletenessForSourceOntology
+  - overlapWithOwnRecordings
+  sources:
+  - futsal4400
+  - smartFutsal
+  - futsalMot
+  - futsalAnaliza
+  - futsalDetect
+tasks:
+- taskId: unified25
+  classes: canonical
+  trainingSources:
+  - own
+  classMap: identity
+- taskId: detailedObjects
+  classes:
+  - ball
+  - outfieldPlayerTeamA
+  - outfieldPlayerTeamB
+  - goalkeeperTeamA
+  - goalkeeperTeamB
+  trainingSources:
+  - own
+  classMap:
+    ball: ball
+    outfieldPlayerTeamA: outfieldPlayerTeamA
+    outfieldPlayerTeamB: outfieldPlayerTeamB
+    goalkeeperTeamA: goalkeeperTeamA
+    goalkeeperTeamB: goalkeeperTeamB
+- taskId: genericObjects
+  classes:
+  - ball
+  - player
+  trainingSources:
+  - own
+  classMap:
+    ball: ball
+    outfieldPlayerTeamA: player
+    outfieldPlayerTeamB: player
+    goalkeeperTeamA: player
+    goalkeeperTeamB: player
+- taskId: playerOnly
+  classes:
+  - player
+  trainingSources:
+  - own
+  classMap:
+    outfieldPlayerTeamA: player
+    outfieldPlayerTeamB: player
+    goalkeeperTeamA: player
+    goalkeeperTeamB: player
+- taskId: ballOnly
+  classes:
+  - ball
+  trainingSources:
+  - own
+  classMap:
+    ball: ball
+- taskId: courtPoints
+  classes:
+  - upperCornerSideA
+  - lowerCornerSideA
+  - upperGoalpostSideA
+  - lowerGoalpostSideA
+  - penaltyMarkSideA
+  - secondPenaltyMarkSideA
+  - upperCenterCourtPoint
+  - lowerCenterCourtPoint
+  - upperHalfwayLinePoint
+  - lowerHalfwayLinePoint
+  - substitutionPoint1
+  - substitutionPoint2
+  - substitutionPoint3
+  - substitutionPoint4
+  - upperCornerSideB
+  - lowerCornerSideB
+  - upperGoalpostSideB
+  - lowerGoalpostSideB
+  - penaltyMarkSideB
+  - secondPenaltyMarkSideB
+  trainingSources:
+  - own
+  classMap:
+    upperCornerSideA: upperCornerSideA
+    lowerCornerSideA: lowerCornerSideA
+    upperGoalpostSideA: upperGoalpostSideA
+    lowerGoalpostSideA: lowerGoalpostSideA
+    penaltyMarkSideA: penaltyMarkSideA
+    secondPenaltyMarkSideA: secondPenaltyMarkSideA
+    upperCenterCourtPoint: upperCenterCourtPoint
+    lowerCenterCourtPoint: lowerCenterCourtPoint
+    upperHalfwayLinePoint: upperHalfwayLinePoint
+    lowerHalfwayLinePoint: lowerHalfwayLinePoint
+    substitutionPoint1: substitutionPoint1
+    substitutionPoint2: substitutionPoint2
+    substitutionPoint3: substitutionPoint3
+    substitutionPoint4: substitutionPoint4
+    upperCornerSideB: upperCornerSideB
+    lowerCornerSideB: lowerCornerSideB
+    upperGoalpostSideB: upperGoalpostSideB
+    lowerGoalpostSideB: lowerGoalpostSideB
+    penaltyMarkSideB: penaltyMarkSideB
+    secondPenaltyMarkSideB: secondPenaltyMarkSideB
