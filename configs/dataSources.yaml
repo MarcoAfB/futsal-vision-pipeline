@@ -1,6 +1,5 @@
-schemaVersion: 1
+schemaVersion: 2
 labelMapPath: labelMap.yaml
-legacyReviewPath: configs/datasets/partidasProprias.yaml
 sourceAccess: readOnly
 expected:
   reviewedFrames: 3684
@@ -25,10 +24,9 @@ splitPolicy:
     reason: Only two original matches contain reviewed annotations of this class.
 ownVideos:
 - videoId: video01
-  videoPath: data/raw/videos/Jogo1.mp4
-  annotationPath: data/raw/anotacoes/annotations_jogo1.xml
+  videoPath: own/videos/Jogo1.mp4
+  annotationPath: own/annotations/annotations_jogo1.xml
   labelMapId: ownCvat
-  legacyMatchId: Jogo1
   reviewedIntervals:
   - intervalId: video01Reviewed
     matchId: match01
@@ -37,7 +35,7 @@ ownVideos:
     internalCutsStatus: pending
     provenance:
       matchIdentityBasis: researcherDeclaration
-      reviewedRangeBasis: legacyReviewRegistry
+      reviewedRangeBasis: catalogReviewedIntervals
   annotationScope: completeForDeclaredClasses
   classesAnnotated: &id001
   - ball
@@ -67,10 +65,9 @@ ownVideos:
   - secondPenaltyMarkSideB
   annotationScopeEvidence: researcherDeclaration
 - videoId: video02
-  videoPath: data/raw/videos/Jogo2.mp4
-  annotationPath: data/raw/anotacoes/annotations_jogo2.xml
+  videoPath: own/videos/Jogo2.mp4
+  annotationPath: own/annotations/annotations_jogo2.xml
   labelMapId: ownCvat
-  legacyMatchId: Jogo2
   reviewedIntervals:
   - intervalId: video02Reviewed
     matchId: match02
@@ -79,15 +76,14 @@ ownVideos:
     internalCutsStatus: pending
     provenance:
       matchIdentityBasis: researcherDeclaration
-      reviewedRangeBasis: legacyReviewRegistry
+      reviewedRangeBasis: catalogReviewedIntervals
   annotationScope: completeForDeclaredClasses
   classesAnnotated: *id001
   annotationScopeEvidence: researcherDeclaration
 - videoId: video03
-  videoPath: data/raw/videos/Jogo3.mp4
-  annotationPath: data/raw/anotacoes/annotations_jogo3.xml
+  videoPath: own/videos/Jogo3.mp4
+  annotationPath: own/annotations/annotations_jogo3.xml
   labelMapId: ownCvat
-  legacyMatchId: Jogo3
   reviewedIntervals:
   - intervalId: video03Reviewed
     matchId: match03
@@ -96,15 +92,14 @@ ownVideos:
     internalCutsStatus: pending
     provenance:
       matchIdentityBasis: researcherDeclaration
-      reviewedRangeBasis: legacyReviewRegistry
+      reviewedRangeBasis: catalogReviewedIntervals
   annotationScope: completeForDeclaredClasses
   classesAnnotated: *id001
   annotationScopeEvidence: researcherDeclaration
 - videoId: video04
-  videoPath: data/raw/videos/Jogo4.mp4
-  annotationPath: data/raw/anotacoes/annotations__jogo4.xml
+  videoPath: own/videos/Jogo4.mp4
+  annotationPath: own/annotations/annotations__jogo4.xml
   labelMapId: ownCvat
-  legacyMatchId: Jogo4
   reviewedIntervals:
   - intervalId: video04Reviewed
     matchId: match04
@@ -113,15 +108,14 @@ ownVideos:
     internalCutsStatus: pending
     provenance:
       matchIdentityBasis: researcherDeclaration
-      reviewedRangeBasis: legacyReviewRegistry
+      reviewedRangeBasis: catalogReviewedIntervals
   annotationScope: completeForDeclaredClasses
   classesAnnotated: *id001
   annotationScopeEvidence: researcherDeclaration
 - videoId: video05
-  videoPath: data/raw/videos/jogo5.mp4
-  annotationPath: data/raw/anotacoes/annotations_jogo5.xml
+  videoPath: own/videos/jogo5.mp4
+  annotationPath: own/annotations/annotations_jogo5.xml
   labelMapId: ownCvat
-  legacyMatchId: Jogo5
   reviewedIntervals:
   - intervalId: video05Reviewed
     matchId: match05
@@ -130,15 +124,14 @@ ownVideos:
     internalCutsStatus: pending
     provenance:
       matchIdentityBasis: researcherDeclaration
-      reviewedRangeBasis: legacyReviewRegistry
+      reviewedRangeBasis: catalogReviewedIntervals
   annotationScope: completeForDeclaredClasses
   classesAnnotated: *id001
   annotationScopeEvidence: researcherDeclaration
 - videoId: video06
-  videoPath: data/raw/videos/jogo6.mp4
-  annotationPath: data/raw/anotacoes/annotations_jogo6.xml
+  videoPath: own/videos/jogo6.mp4
+  annotationPath: own/annotations/annotations_jogo6.xml
   labelMapId: ownCvat
-  legacyMatchId: Jogo6
   reviewedIntervals:
   - intervalId: video06Reviewed
     matchId: match06
@@ -147,15 +140,14 @@ ownVideos:
     internalCutsStatus: pending
     provenance:
       matchIdentityBasis: researcherDeclaration
-      reviewedRangeBasis: legacyReviewRegistry
+      reviewedRangeBasis: catalogReviewedIntervals
   annotationScope: completeForDeclaredClasses
   classesAnnotated: *id001
   annotationScopeEvidence: researcherDeclaration
 - videoId: video07
-  videoPath: data/raw/videos/jogo7.mp4
-  annotationPath: data/raw/anotacoes/annotations_jogo7.xml
+  videoPath: own/videos/jogo7.mp4
+  annotationPath: own/annotations/annotations_jogo7.xml
   labelMapId: ownCvat
-  legacyMatchId: Jogo7
   reviewedIntervals:
   - intervalId: video07Reviewed
     matchId: match07
@@ -164,15 +156,14 @@ ownVideos:
     internalCutsStatus: pending
     provenance:
       matchIdentityBasis: researcherDeclaration
-      reviewedRangeBasis: legacyReviewRegistry
+      reviewedRangeBasis: catalogReviewedIntervals
   annotationScope: completeForDeclaredClasses
   classesAnnotated: *id001
   annotationScopeEvidence: researcherDeclaration
 - videoId: video08
-  videoPath: data/raw/videos/jogo8.mp4
-  annotationPath: data/raw/anotacoes/annotations_jogo8.xml
+  videoPath: own/videos/jogo8.mp4
+  annotationPath: own/annotations/annotations_jogo8.xml
   labelMapId: ownCvat
-  legacyMatchId: Jogo8
   reviewedIntervals:
   - intervalId: video08Reviewed
     matchId: match08
@@ -181,15 +172,14 @@ ownVideos:
     internalCutsStatus: pending
     provenance:
       matchIdentityBasis: researcherDeclaration
-      reviewedRangeBasis: legacyReviewRegistry
+      reviewedRangeBasis: catalogReviewedIntervals
   annotationScope: completeForDeclaredClasses
   classesAnnotated: *id001
   annotationScopeEvidence: researcherDeclaration
 - videoId: video09To16
-  videoPath: data/raw/videos/jogo9-16.mp4
-  annotationPath: data/raw/anotacoes/annotations_jogo9_16.xml
+  videoPath: own/videos/jogo9-16.mp4
+  annotationPath: own/annotations/annotations_jogo9_16.xml
   labelMapId: ownCvat
-  legacyMatchId: null
   reviewedIntervals:
   - intervalId: video09To16Block01
     matchId: match09
@@ -256,8 +246,8 @@ publicSources:
   sourceName: Futsal4400
   format: yolo
   required: true
-  imageRoot: Futsal4400
-  labelRoot: Futsal4400
+  imageRoot: public/futsal4400
+  labelRoot: public/futsal4400
   labelMapId: publicBallPlayer
   annotationScope: sourceOntologyOnly
   allowedUses:
@@ -268,13 +258,13 @@ publicSources:
   - .png
   annotationIgnorePatterns: []
   metadataFiles: []
-  labelMapEvidence: configs/datasets/fontes.yaml
+  recordNamespace: Futsal4400
 - sourceId: smartFutsal
   sourceName: SmartFutsal
   format: yolo
   required: true
-  imageRoot: SmartFutsal
-  labelRoot: SmartFutsal
+  imageRoot: public/smartFutsal
+  labelRoot: public/smartFutsal
   labelMapId: publicBallPlayer
   annotationScope: sourceOntologyOnly
   allowedUses:
@@ -285,13 +275,13 @@ publicSources:
   - .png
   annotationIgnorePatterns: []
   metadataFiles: []
-  labelMapEvidence: configs/datasets/fontes.yaml
+  recordNamespace: SmartFutsal
 - sourceId: futsalMot
   sourceName: FutsalMOT
   format: yolo
   required: true
-  imageRoot: FutsalMOT
-  labelRoot: FutsalMOT
+  imageRoot: public/futsalMot
+  labelRoot: public/futsalMot
   labelMapId: publicBallRoles
   annotationScope: sourceOntologyOnly
   allowedUses:
@@ -303,15 +293,15 @@ publicSources:
   annotationIgnorePatterns:
   - README*.txt
   metadataFiles:
-  - FutsalMOT/README.dataset.txt
-  - FutsalMOT/README.roboflow.txt
-  labelMapEvidence: configs/datasets/fontes.yaml
+  - public/futsalMot/README.dataset.txt
+  - public/futsalMot/README.roboflow.txt
+  recordNamespace: FutsalMOT
 - sourceId: futsalAnaliza
   sourceName: FutsalAnaliza
   format: yolo
   required: true
-  imageRoot: FutsalAnaliza
-  labelRoot: FutsalAnaliza
+  imageRoot: public/futsalAnaliza
+  labelRoot: public/futsalAnaliza
   labelMapId: publicBallRoles
   annotationScope: sourceOntologyOnly
   allowedUses:
@@ -323,15 +313,15 @@ publicSources:
   annotationIgnorePatterns:
   - README*.txt
   metadataFiles:
-  - FutsalAnaliza/README.dataset.txt
-  - FutsalAnaliza/README.roboflow.txt
-  labelMapEvidence: configs/datasets/fontes.yaml
+  - public/futsalAnaliza/README.dataset.txt
+  - public/futsalAnaliza/README.roboflow.txt
+  recordNamespace: FutsalAnaliza
 - sourceId: futsalDetect
   sourceName: FutsalDetect
   format: yolo
   required: true
-  imageRoot: FutsalDetect
-  labelRoot: FutsalDetect
+  imageRoot: public/futsalDetect
+  labelRoot: public/futsalDetect
   labelMapId: publicBallRoles
   annotationScope: sourceOntologyOnly
   allowedUses:
@@ -343,27 +333,8 @@ publicSources:
   annotationIgnorePatterns:
   - README*.txt
   metadataFiles:
-  - FutsalDetect/README.dataset.txt
-  - FutsalDetect/README.roboflow.txt
-  labelMapEvidence: configs/datasets/fontes.yaml
-syntheticSources:
-- sourceId: syntheticCourt
-  sourceName: SinteticoQuadra
-  format: yolo
-  required: false
-  imageRoot: data/raw/sinteticoQuadra/images/train
-  labelRoot: data/raw/sinteticoQuadra/labels/train
-  labelMapId: syntheticCourtPoints
-  annotationScope: courtLandmarks
-  allowedUses:
-  - training
-  imageExtensions:
-  - .jpg
-  - .jpeg
-  - .png
-  annotationIgnorePatterns: []
-  metadataFiles:
-  - data/raw/sinteticoQuadra/datasetFonte.yaml
-  - data/raw/sinteticoQuadra/resumo.json
-  - data/raw/sinteticoQuadra/manifesto.jsonl
-  labelMapEvidence: configs/datasets/fontes.yaml
+  - public/futsalDetect/README.dataset.txt
+  - public/futsalDetect/README.roboflow.txt
+  recordNamespace: FutsalDetect
+syntheticSources: []
+reviewPolicy: catalogReviewedIntervals
