@@ -56,6 +56,16 @@ def verifyReport(root):
         if evaluation["status"] == "running":
             raise ValueError("An active evaluation cannot be transported.")
         trainingHash = evaluation.get("trainingRunSha256")
+        if evaluation.get("kind") == "courtTrainingComparison":
+            nestedHashes = []
+            for name in ("baseline", "candidate"):
+                nested = root / "evidence" / name
+                nestedHashes.append(verifyReport(nested))
+                if readJson(nested / "evaluationContract.json")["contractId"] != evaluation[f"{name}ContractId"]:
+                    raise ValueError("Court comparison contains a different nested evaluation seal.")
+            if nestedHashes != evaluation["trainingRunHashes"]:
+                raise ValueError("Court comparison training run hashes differ from archived evaluations.")
+            trainingHash = nestedHashes[1]
     elif (root / "trainingRun.json").is_file():
         trainingHash = hashFile(root / "trainingRun.json")
     else:

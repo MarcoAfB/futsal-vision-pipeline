@@ -5,6 +5,9 @@ from futsal.datasets.datasetFiles import readJson, writeJson
 
 
 def addResearchCommands(commands):
+    courtComparison = commands.add_parser("compareCourtTraining", help="Compare real-only and supplemented court training.")
+    for name in ("baselineEvaluationDir", "candidateEvaluationDir", "outputDir"):
+        courtComparison.add_argument(f"--{name}", type=Path, required=True)
     comparison = commands.add_parser("compareConfigurations", help="Compare sealed scientific evaluations without inference.")
     for name in ("baselineEvaluationDir", "candidateEvaluationDir", "outputDir"):
         comparison.add_argument(f"--{name}", type=Path, required=True)
@@ -31,6 +34,13 @@ def handleResearchCommand(arguments):
     from futsal.evaluation.evaluationRun import evaluateRun
     from futsal.reporting.researchReport import renderReport, renderTrainingReport
 
+    if arguments.command == "compareCourtTraining":
+        from futsal.evaluation.courtComparison import compareCourtTraining
+
+        result = compareCourtTraining(arguments.baselineEvaluationDir, arguments.candidateEvaluationDir, arguments.outputDir)
+        path = renderReport(arguments.outputDir)
+        print(f"Court training comparison: {result['status']}; report: {path}")
+        return 0 if result["status"] == "completed" else 1
     if arguments.command == "compareConfigurations":
         from futsal.evaluation.configurationComparison import compareConfigurations
 
