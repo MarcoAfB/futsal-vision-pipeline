@@ -420,3 +420,154 @@ def drawLogosAndDistractors(
             cv2.circle(
                 image, plane.point(x, model.width / 2), radius, color, thickness, cv2.LINE_AA
             )
+
+
+def drawOfficialMarkings(image: np.ndarray, plane: MetricPlane, rng: np.random.Generator) -> None:
+    model = plane.model
+    s = plane.scale
+    line = max(2, int(round(0.08 * s)))
+    color = clampColor(np.asarray([238, 238, 236]) + rng.normal(0, 5, 3))
+    centerX = model.length / 2
+    centerY = model.width / 2
+    halfAreaSegment = (model.goalWidth + 0.16) / 2
+    upperY = centerY - halfAreaSegment
+    lowerY = centerY + halfAreaSegment
+    areaRadiusPixels = int(round(model.penaltyDistance * s))
+    cv2.rectangle(
+        image,
+        plane.point(0.0, 0.0),
+        plane.point(model.length, model.width),
+        color,
+        line,
+        cv2.LINE_AA,
+    )
+    cv2.line(
+        image,
+        plane.point(centerX, 0.0),
+        plane.point(centerX, model.width),
+        color,
+        line,
+        cv2.LINE_AA,
+    )
+    cv2.circle(
+        image,
+        plane.point(centerX, centerY),
+        int(round(model.centerCircleRadius * s)),
+        color,
+        line,
+        cv2.LINE_AA,
+    )
+    cv2.circle(
+        image, plane.point(centerX, centerY), max(2, int(round(0.06 * s))), color, -1, cv2.LINE_AA
+    )
+    cv2.ellipse(
+        image,
+        plane.point(0.0, upperY),
+        (areaRadiusPixels, areaRadiusPixels),
+        0,
+        270,
+        360,
+        color,
+        line,
+        cv2.LINE_AA,
+    )
+    cv2.ellipse(
+        image,
+        plane.point(0.0, lowerY),
+        (areaRadiusPixels, areaRadiusPixels),
+        0,
+        0,
+        90,
+        color,
+        line,
+        cv2.LINE_AA,
+    )
+    cv2.line(
+        image,
+        plane.point(model.penaltyDistance, upperY),
+        plane.point(model.penaltyDistance, lowerY),
+        color,
+        line,
+        cv2.LINE_AA,
+    )
+    cv2.ellipse(
+        image,
+        plane.point(model.length, upperY),
+        (areaRadiusPixels, areaRadiusPixels),
+        0,
+        180,
+        270,
+        color,
+        line,
+        cv2.LINE_AA,
+    )
+    cv2.ellipse(
+        image,
+        plane.point(model.length, lowerY),
+        (areaRadiusPixels, areaRadiusPixels),
+        0,
+        90,
+        180,
+        color,
+        line,
+        cv2.LINE_AA,
+    )
+    cv2.line(
+        image,
+        plane.point(model.length - model.penaltyDistance, upperY),
+        plane.point(model.length - model.penaltyDistance, lowerY),
+        color,
+        line,
+        cv2.LINE_AA,
+    )
+    markRadius = max(2, int(round(0.06 * s)))
+    for x in (
+        model.penaltyDistance,
+        model.secondPenaltyDistance,
+        model.length - model.penaltyDistance,
+        model.length - model.secondPenaltyDistance,
+    ):
+        cv2.circle(image, plane.point(x, centerY), markRadius, color, -1, cv2.LINE_AA)
+    for x in (reference.coordinate[0] for reference in model.references[10:14]):
+        cv2.line(
+            image,
+            plane.point(x, model.width - 0.4),
+            plane.point(x, model.width + 0.4),
+            color,
+            line,
+            cv2.LINE_AA,
+        )
+    cornerRadius = max(2, int(round(0.25 * s)))
+    for x, y, start, end in (
+        (0.0, 0.0, 0, 90),
+        (0.0, model.width, 270, 360),
+        (model.length, 0.0, 90, 180),
+        (model.length, model.width, 180, 270),
+    ):
+        cv2.ellipse(
+            image,
+            plane.point(x, y),
+            (cornerRadius, cornerRadius),
+            0,
+            start,
+            end,
+            color,
+            line,
+            cv2.LINE_AA,
+        )
+
+
+def applyFloorReflections(image: np.ndarray, rng: np.random.Generator) -> np.ndarray:
+    height, width = image.shape[:2]
+    mapImage = np.ones((max(8, height // 16), max(8, width // 16)), np.float32)
+    yy, xx = np.mgrid[0 : mapImage.shape[0], 0 : mapImage.shape[1]]
+    for _ in range(int(rng.integers(2, 7))):
+        cx = rng.uniform(0, mapImage.shape[1])
+        cy = rng.uniform(0, mapImage.shape[0])
+        sx = rng.uniform(mapImage.shape[1] * 0.025, mapImage.shape[1] * 0.13)
+        sy = rng.uniform(mapImage.shape[0] * 0.08, mapImage.shape[0] * 0.35)
+        intensity = rng.uniform(0.04, 0.24)
+        mapImage += intensity * np.exp(-0.5 * (((xx - cx) / sx) ** 2 + ((yy - cy) / sy) ** 2))
+    mapImage = cv2.resize(mapImage, (width, height), interpolation=cv2.INTER_CUBIC)
+    resultado = image.astype(np.float32) * mapImage[..., None]
+    return np.clip(resultado, 0, 255).astype(np.uint8)
