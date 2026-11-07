@@ -18,7 +18,7 @@ def selectGlobalDetections(components, maxDetections):
 def predictConfiguration(components, task, references, trainingConfig, config, workDir):
     import torch
     from ultralytics.cfg import get_cfg
-    from ultralytics.data import build_dataloader, build_yolo_dataset
+    from ultralytics.data import build_dataloader
     from ultralytics.models.yolo.detect import DetectionValidator
     from ultralytics.nn.tasks import load_checkpoint
 
@@ -45,7 +45,9 @@ def predictConfiguration(components, task, references, trainingConfig, config, w
     strides = {int(model.stride.max()) for _, model in models}
     if len(strides) != 1:
         raise ValueError("Joint native validation requires identical input strides.")
-    dataset = build_yolo_dataset(args, data["val"], args.batch * 2, data, mode="val", rect=True, stride=strides.pop())
+    from futsal.training.sharedRuntime import buildRuntimeDataset
+
+    dataset = buildRuntimeDataset(args, workDir, task["taskId"], data, args.batch * 2, "val", strides.pop())
     writeJson(workDir / "configurationLoaderAudit.json", verifyLoader(dataset, {"validation": task["rows"]}, "validation", workDir))
     loader = build_dataloader(dataset, batch=args.batch * 2, workers=0, shuffle=False, rank=-1, device=device)
     validator = DetectionValidator(loader, save_dir=workDir / "nativeConfiguration", args=vars(args))
@@ -53,6 +55,7 @@ def predictConfiguration(components, task, references, trainingConfig, config, w
     validator.args.quantize = None
     validator.init_metrics(SimpleNamespace(names=dict(enumerate(names)), end2end=True))
     byPath = {(workDir / "runtimeData" / row["imagePath"]).resolve(): row for row in references}
+    byRecord = {row["recordId"]: row for row in references}
     predictions = []
     with torch.inference_mode():
         for rawBatch in loader:
@@ -77,7 +80,8 @@ def predictConfiguration(components, task, references, trainingConfig, config, w
                 prepared = validator._prepare_batch(index, batch)
                 mask = validator._process_batch(native, prepared)["tp"].tolist()
                 scaled = validator.scale_preds(native, prepared)
-                reference = byPath[Path(prepared["im_file"]).resolve()]
+                reference = (byRecord[batch["recordId"][index]] if "recordId" in batch else
+                             byPath[Path(prepared["im_file"]).resolve()])
                 detections = [{**item, "className": names[item["classId"]], "box": box}
                               for item, box in zip(selected, scaled["bboxes"].cpu().tolist(), strict=True)]
                 predictions.append({"recordId": reference["recordId"], "dimensions": reference["dimensions"],

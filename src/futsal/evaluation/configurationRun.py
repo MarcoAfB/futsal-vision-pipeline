@@ -38,7 +38,10 @@ def loadComponent(runDir, taskId, datasetDir, classes):
         raise ValueError("Each component must be its own independent single-stage run.")
     if run.get("integrityErrors") or not run.get("runtimeIntegrityAfterRun") or not run.get("bundleIntegrityAfterRun", {}).get("hashesVerified"):
         raise ValueError("Component run has no successful input/runtime integrity record.")
-    if run["contractId"] != readJson(Path(datasetDir) / "contract.json")["contractId"] or run["configurationId"] != hashJson(config):
+    from futsal.datasets.sharedEquivalence import semanticSelection, verifyRunView
+
+    equivalence = verifyRunView(root, datasetDir, run)
+    if run["configurationId"] != hashJson(config):
         raise ValueError("Component dataset/configuration identity mismatch.")
     for evidence in (run["artifacts"], run["inputEvidence"], run["code"]["files"]):
         verifyEvidence(root, evidence)
@@ -48,7 +51,7 @@ def loadComponent(runDir, taskId, datasetDir, classes):
     snapshot = loadSyntheticSnapshot(root, config, classes)
     if snapshot is not None and not run.get("syntheticIntegrityAfterRun"):
         raise ValueError("Mixed component has no successful synthetic source integrity record.")
-    if selection != selectTrainingData(datasetDir, config, snapshot):
+    if semanticSelection(selection) != semanticSelection(selectTrainingData(datasetDir, config, snapshot)):
         raise ValueError("Component did not use its full declared training/validation cohort.")
     _, tasks = evaluationTasks(datasetDir, root, run, "runValidation")
     if tasks[taskId]["classes"] != classes:
@@ -58,7 +61,7 @@ def loadComponent(runDir, taskId, datasetDir, classes):
         raise ValueError("Component did not initialize directly from the official checkpoint.")
     checkpoint = run["stages"][0]["results"]["checkpoints"]["best"]
     verifyEvidence(root, [checkpoint])
-    return {"taskId": taskId, "classes": classes, "runDirectory": str(root), "run": run,
+    return {"taskId": taskId, "classes": classes, "runDirectory": str(root), "run": run, "datasetEquivalence": equivalence,
             "runSha256": hashFile(root / "run.json"), "checkpoint": checkpoint,
             "checkpointPath": str(resolveSourcePath(root, checkpoint["path"])), "rows": tasks[taskId]["rows"]}
 
@@ -94,16 +97,29 @@ def configurationInputs(objectsRunDir, courtRunDir, datasetDir, referenceDataset
 
 
 def evaluateConfiguration(objectsRunDir, courtRunDir, datasetDir, referenceDatasetDir, configPath, outputDir,
-                          progress=print, *, workRoot=None):
+                          progress=print, *, workRoot=None, mediaStoreDir=None):
     datasetDir, referenceDir = Path(datasetDir).resolve(), Path(referenceDatasetDir).resolve()
+    from futsal.datasets.mediaStore import isSharedView
+
+    if any(isSharedView(root) for root in (datasetDir, referenceDir)) and mediaStoreDir is None:
+        raise ValueError("Shared joint evaluation requires --mediaStoreDir.")
     inputs = [Path(objectsRunDir), Path(courtRunDir), datasetDir, referenceDir]
     output = validateResearchOutput(outputDir, inputs, [Path(configPath)])
     config = loadEvaluationConfig(configPath)
     parent, task, components = configurationInputs(objectsRunDir, courtRunDir, datasetDir, referenceDir)
-    if readJson(datasetDir / "contract.json").get("parentContractId") != readJson(referenceDir / "contract.json")["contractId"]:
+    referenceContract = readJson(referenceDir / "contract.json")
+    referenceIds = {referenceContract["contractId"]}
+    if referenceContract.get("kind") == "sharedTaskView":
+        referenceIds.add(referenceContract["parentContractId"])
+    if readJson(datasetDir / "contract.json").get("parentContractId") not in referenceIds:
         raise ValueError("Materialized dataset parent contract mismatch.")
     workRoot = Path(workRoot).resolve() if workRoot is not None else Path(futsal.__file__).resolve().parents[2] / "outputs/evaluationWork"
     work = validateResearchOutput(workRoot / hashJson(str(output))[:16], [*inputs, output], [Path(configPath)])
+    if mediaStoreDir is not None:
+        from futsal.datasets.mediaStore import protectMediaOutput
+
+        protectMediaOutput(output, mediaStoreDir)
+        protectMediaOutput(work, mediaStoreDir)
     validateResearchOutput(output, [*inputs, work], [Path(configPath)])
     output.mkdir(parents=True)
     (output / "evidence/joint").mkdir(parents=True)
@@ -113,7 +129,8 @@ def evaluateConfiguration(objectsRunDir, courtRunDir, datasetDir, referenceDatas
         "status": "running", "startedAt": utcNow(), "purpose": "scientificTraining", "selection": "commonValidation",
         "protocol": config, "protocolId": hashJson(config), "classes": task["classes"], "pointClasses": task["classes"][5:],
         "components": [{key: value for key, value in component.items() if key != "rows"} for component in components],
-        "referenceContractId": readJson(referenceDir / "contract.json")["contractId"],
+        "referenceContractId": referenceContract.get("parentContractId") if referenceContract.get("kind") == "sharedTaskView" else referenceContract["contractId"],
+        "referenceDatasetContractId": referenceContract["contractId"],
         "contractId": readJson(datasetDir / "contract.json")["contractId"], "recordIds": [row["recordId"] for row in task["rows"]],
         "testEvaluated": False, "requestedDevice": trainingConfig["evaluationDevice"], "environment": packageVersions(),
         "workDirectory": str(work), "datasetDirectory": str(datasetDir), "referenceDatasetDirectory": str(referenceDir),
@@ -133,13 +150,20 @@ def evaluateConfiguration(objectsRunDir, courtRunDir, datasetDir, referenceDatas
                 for name in ("syntheticContract.json", "syntheticManifest.jsonl"):
                     shutil.copyfile(Path(component["runDirectory"]) / "inputs" / name, target / name)
         progress("Checking reference/projected bundles before joint validation...")
-        state["bundlesBefore"] = [verifyBundleUnchanged(root, contract, digest) for root, contract, digest in contracts]
+        integrityOptions = {"mediaStoreDir": mediaStoreDir} if mediaStoreDir is not None else {}
+        state["bundlesBefore"] = [verifyBundleUnchanged(root, contract, digest, **integrityOptions) for root, contract, digest in contracts]
         if state["requestedDevice"] != "cpu":
             state["deviceInspection"] = inspectEnvironment(state["requestedDevice"])
             if not state["deviceInspection"]["ready"]:
                 raise ValueError("Joint evaluation GPU is not ready; no fallback is allowed.")
-        runtime = copyRuntimeData(referenceDir, work, {"tasks": {task["taskId"]: {
-            "classes": task["classes"], "training": [], "validation": task["rows"]}}})
+        selected = {"tasks": {task["taskId"]: {
+            "classes": task["classes"], "training": [], "validation": task["rows"]}}}
+        if mediaStoreDir is not None:
+            from futsal.training.sharedRuntime import prepareSharedRuntime
+
+            runtime = prepareSharedRuntime(mediaStoreDir, work, selected)
+        else:
+            runtime = copyRuntimeData(referenceDir, work, selected)
         writeJson(output / "evidence/runtimeEvidence.json", runtime)
         initializeBackend(work / "backend", trainingConfig["numThreads"])
         references = buildReferences(parent, task)
@@ -152,7 +176,8 @@ def evaluateConfiguration(objectsRunDir, courtRunDir, datasetDir, referenceDatas
         writeJson(output / "evidence/joint/detection.json", detection)
         writeJson(output / "evidence/joint/points.json", points)
         fixed = fixedExamples({task["taskId"]: task}, config)
-        state["examples"] = archiveExamples(referenceDir, output, selectExamples(fixed, detection, points, config), references)
+        state["examples"] = archiveExamples(referenceDir, output, selectExamples(fixed, detection, points, config), references,
+                                             mediaStoreDir=mediaStoreDir)
         state.update(status="completed", nativeValidationMetrics=native, apMatchingSpace="nativeLetterboxedInput",
                      predictionSpace="originalImagePixels", globalDetectionLimit=config["maxDetections"])
         for name in ("configurationArguments.json", "configurationLoaderAudit.json"):
@@ -163,7 +188,8 @@ def evaluateConfiguration(objectsRunDir, courtRunDir, datasetDir, referenceDatas
         (output / "evidence/failure.txt").write_text(traceback.format_exc(), encoding="utf-8")
     finally:
         try:
-            state["bundlesAfter"] = [verifyBundleUnchanged(root, contract, digest) for root, contract, digest in contracts]
+            integrityOptions = {"mediaStoreDir": mediaStoreDir} if mediaStoreDir is not None else {}
+            state["bundlesAfter"] = [verifyBundleUnchanged(root, contract, digest, **integrityOptions) for root, contract, digest in contracts]
             if runtime is not None:
                 verifyEvidence(work, runtime)
             for component in components:

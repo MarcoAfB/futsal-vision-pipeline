@@ -4,6 +4,7 @@ from collections import Counter
 from pathlib import Path
 
 from futsal.datasets.datasetFiles import hashJson, readJson, writeJson
+from futsal.datasets.sharedEquivalence import semanticRows
 from futsal.evaluation.evaluationData import (
     readJsonLines,
     validatePredictions,
@@ -65,7 +66,7 @@ def comparisonInputs(baselineDir, candidateDir):
     oldRoot, newRoot = Path(baselineDir) / stage["evidenceDirectory"], Path(candidateDir) / "evidence/joint"
     refs = readJsonLines(oldRoot / "references.jsonl")
     newRefs = readJsonLines(newRoot / "references.jsonl")
-    if refs != newRefs or [row["recordId"] for row in refs] != candidate["recordIds"] or stage["recordIds"] != candidate["recordIds"]:
+    if semanticRows(refs) != semanticRows(newRefs) or [row["recordId"] for row in refs] != candidate["recordIds"] or stage["recordIds"] != candidate["recordIds"]:
         raise ValueError("Comparison requires identical canonical references and common record membership.")
     values = []
     for root in (oldRoot, newRoot):
