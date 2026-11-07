@@ -5,22 +5,28 @@ splits, convert annotations, extract frames, or modify source files.
 
 ## Paths and catalog contract
 
-The inventory receives an explicit `--dataRoot` pointing to the legacy `Python`
-directory. Video, annotation, image, label, metadata, and evidence paths in
+The inventory receives an explicit `--dataRoot data/raw` pointing to the local
+raw source tree. Video, annotation, image, label and source metadata paths in
 `configs/dataSources.yaml` are relative to that root.
 `labelMapPath` is the exception: it is relative to the catalog file itself.
 No machine-specific absolute path is stored in the catalog.
 
-Both YAML files use `schemaVersion: 1`. The `expected` section describes reviewed
+The source catalog uses `schemaVersion: 2`; the label map uses version1. The `expected` section describes reviewed
 own frame records, not unique decoded images or annotation counts. Public and
 synthetic images are excluded from these expected totals. Original video filenames,
 XML labels, track IDs, and YOLO class IDs must remain available in inventory records.
 
-The first eight videos identify their entry in the legacy review registry through
-`legacyMatchId`. Their intervals must agree with the authoritative limits at
-`legacyReviewPath`; extra frames in the XML or media are not eligible merely
-because they exist. The montage has no legacy registry entry and uses explicitly
-confirmed intervals.
+Reviewed intervals in the project catalog are authoritative for all nine videos.
+Extra frames in the XML or media are not eligible merely because they exist.
+The montage uses the explicitly confirmed original-match intervals. No external
+review registry or code/configuration from another project is needed.
+
+`data/raw/sourceManifest.json` seals the10862 raw files and their hashes. Native
+videos/XMLs are under own/videos and own/annotations; the five public sources are
+under public/sourceId. Public record namespaces keep sample identity independent
+of the storage directory. Annotation mapping evidence is the project's own label
+map, already included in configuration hashes. Source attribution stays with the
+public files. The current source catalogue registers only real data.
 
 ## Reviewed own recordings
 
@@ -45,7 +51,7 @@ Frame indices are zero-based and interval endpoints are inclusive.
 | video09To16 | 1070-1249 | match14 |
 
 These are 3,684 reviewed frame records, 15 intervals, nine videos, and 14 original
-matches. The legacy name `jogo9-16.mp4` is preserved; it is not a declaration
+matches. The original filename `jogo9-16.mp4` is preserved; it is not a declaration
 that the montage contains eight new matches.
 
 The original Jogo7 recording and montage frames 530-709 have the same
@@ -66,7 +72,7 @@ verification of visual completeness. Class presence counts do not establish
 visibility or prove visual absence.
 
 Every interval has `internalCutsStatus: pending`. Its provenance distinguishes
-legacy review limits from explicitly confirmed montage ranges. The interval
+catalogued reviewed limits from explicitly confirmed montage ranges. The interval
 530-709 records `sameMatchAsVideoId: video07` and
 `matchIdentityBasis: researcherConfirmedSameMatch`; this identity link is supplied
 by the researcher rather than inferred from filenames or visual similarity.
@@ -104,7 +110,7 @@ different target. Unknown labels require an inventory finding rather than a gues
 
 The five required local sources use a flat layout: images and YOLO text labels
 share a directory and pair by filename stem. Their numeric mappings are documented
-in the legacy `configs/datasets/fontes.yaml`; the label text files themselves
+in this project's `configs/labelMap.yaml`; the label text files themselves
 do not declare class names.
 
 | Source | Declared source classes | Local metadata |
@@ -131,21 +137,11 @@ Public sources are eligible only for compatible training stages. Their listed me
 evidence to inventory, not a grant of redistribution rights. Missing metadata
 must remain explicit.
 
-## Optional synthetic court source
+## Source integrity
 
-`syntheticCourt` registers the existing generator's expected
-`images/train` and `labels/train` layout. Its twenty landmark classes use YOLO
-boxes with `classId centerX centerY width height` in normalized coordinates.
-The small boxes identify landmarks; their coordinates remain in the source format.
-Original numeric IDs and
-source names containing `team_a` or `team_b` are retained while canonical
-landmark names use `SideA` or `SideB`.
-
-The source is optional and training-only. Debug previews are outside the image
-root. `datasetFonte.yaml`, `resumo.json`, and `manifesto.jsonl` are registered
-as metadata. Registering this source does not regenerate it or certify its present
-availability. A missing or unreadable optional directory must be reported as such,
-rather than counted as a successfully inventoried empty dataset.
+Run `python -m futsal verifyRawSources --dataRoot data/raw` to check all imported
+file hashes and exact membership. Raw files are excluded from Git and protected
+from research output writes. The current source catalogue has no synthetic inputs.
 
 ## Split constraints and current coverage limit
 

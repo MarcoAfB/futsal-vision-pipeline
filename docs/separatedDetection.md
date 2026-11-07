@@ -17,7 +17,7 @@ files remain reserved; training/test coverage is checked from eligibility metada
 Prepare labels and only missing reviewed development images locally:
 
 ```text
-python -m futsal prepareProjection --sourceDatasetDir data/prepared/curriculumV1 --dataRoot ../Python --config configs/separatedDetection.yaml --outputDir data/projections/separatedV1
+python -m futsal prepareProjection --sourceDatasetDir data/prepared/curriculumV1 --dataRoot data/raw --config configs/separatedDetection.yaml --outputDir data/projections/separatedV1
 python scripts/projectionTransfer.py pack --projectionDir data/projections/separatedV1 --projectionId <projectionId> --archive data/transfers/separatedV1.tar.gz --receipt data/transfers/separatedV1.receipt.json
 ```
 

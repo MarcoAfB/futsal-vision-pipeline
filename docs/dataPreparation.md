@@ -97,7 +97,7 @@ not invalid source geometry. Quarantined samples cannot enter conversion.
 ## Planning and source snapshots
 
 ```text
-uv run python -m futsal planDataset --dataRoot ../Python --outputDir outputs/curriculumPlan
+uv run python -m futsal planDataset --dataRoot data/raw --outputDir outputs/curriculumPlan
 ```
 
 The default recipe is `configs/curriculum.yaml`; use `--config` for another recipe.
@@ -119,7 +119,7 @@ an interrupted operation does not publish a completed-looking directory.
 ## Development dataset export
 
 ```text
-uv run python -m futsal prepareDataset --dataRoot ../Python --plan outputs/curriculumPlan/plan.json --outputDir data/prepared/curriculumV1
+uv run python -m futsal prepareDataset --dataRoot data/raw --plan outputs/curriculumPlan/plan.json --outputDir data/prepared/curriculumV1
 ```
 
 Each task has `dataset.yaml`, `images/train`, `images/val`, and matching label

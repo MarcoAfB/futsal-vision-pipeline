@@ -69,11 +69,16 @@ See [evaluation and reporting](docs/evaluation.md) for commands and metric defin
 
 ## Dataset inventory
 
+The local raw tree contains own videos/XMLs and the five real public sources.
+`python -m futsal verifyRawSources --dataRoot data/raw` verifies its source contract.
+See [raw sources](docs/rawSources.md) for the layout and integrity checks.
+
+
 From the project root, point `dataRoot` at the directory containing the original
-registered sources. For the current sibling reference directory:
+registered sources. The project keeps these inputs in data/raw:
 
 ```text
-uv run python -m futsal inventory --dataRoot ../Python --outputDir outputs/initialInventory
+uv run python -m futsal inventory --dataRoot data/raw --outputDir outputs/initialInventory
 ```
 
 Use `--config <path>` for a different catalog; the default is
@@ -101,8 +106,8 @@ and the [initial audit](docs/initialAudit.md) for dataset-specific decisions and
 Prepare the 2-to-3-to-25 class curriculum using the frozen original-match split:
 
 ```text
-uv run python -m futsal planDataset --dataRoot ../Python --outputDir outputs/curriculumPlan
-uv run python -m futsal prepareDataset --dataRoot ../Python --plan outputs/curriculumPlan/plan.json --outputDir data/prepared/curriculumV1
+uv run python -m futsal planDataset --dataRoot data/raw --outputDir outputs/curriculumPlan
+uv run python -m futsal prepareDataset --dataRoot data/raw --plan outputs/curriculumPlan/plan.json --outputDir data/prepared/curriculumV1
 uv run python -m futsal verifyDataset --datasetDir data/prepared/curriculumV1
 ```
 
@@ -145,5 +150,5 @@ and source archiving. Experimental variants use configuration files and a shared
 implementation. Commits describe coherent changes with their validation.
 
 Datasets, model weights, environments, and generated results are excluded from Git.
-The legacy source data must remain unchanged. Source licensing is independent of this
+The raw source data must remain unchanged. Source licensing is independent of this
 implementation and must be checked before redistribution.

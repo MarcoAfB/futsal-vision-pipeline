@@ -4,10 +4,11 @@ This document records the original read-only inventory. Later task eligibility,
 quarantine decisions and frozen splits are documented in
 [dataset preparation](dataPreparation.md); the source findings below remain intact.
 
-Run from the project root:
+The observations below describe the original audit snapshot. To run an inventory
+using the current local source root, use a new output directory:
 
 ```text
-uv run python -m futsal inventory --dataRoot ../Python --outputDir outputs/initialInventory
+uv run python -m futsal inventory --dataRoot data/raw --outputDir outputs/currentInventory
 ```
 
 The audit completed with exit code 1: reports were generated and source findings
