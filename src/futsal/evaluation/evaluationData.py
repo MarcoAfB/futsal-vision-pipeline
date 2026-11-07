@@ -5,6 +5,7 @@ from pathlib import Path
 import futsal
 from futsal.datasets.datasetFiles import readJson, validateNewOutput
 from futsal.datasets.recipes import activeTasks
+from futsal.datasets.sharedEquivalence import semanticRows, semanticSelection
 from futsal.inventory.catalog import hashFile, readYaml
 
 
@@ -73,7 +74,7 @@ def evaluationTasks(datasetDir, runDir, run, selection):
         from futsal.training.trainingData import selectTrainingData
 
         snapshot = loadSyntheticSnapshot(runDir, run["configuration"], tasks["courtPoints"]["classes"])
-        if not run.get("syntheticIntegrityAfterRun") or saved != selectTrainingData(datasetDir, run["configuration"], snapshot):
+        if not run.get("syntheticIntegrityAfterRun") or semanticSelection(saved) != semanticSelection(selectTrainingData(datasetDir, run["configuration"], snapshot)):
             raise ValueError("Mixed run differs from its complete verified real and synthetic selection.")
     result = {}
     for stage in run["configuration"]["stages"]:
@@ -84,13 +85,13 @@ def evaluationTasks(datasetDir, runDir, run, selection):
         byId = {row["recordId"]: row for row in rows}
         if selection == "runValidation":
             requested = saved["tasks"][taskId]["validation"]
-            if any(byId.get(row["recordId"]) != row for row in requested):
+            if any(row["recordId"] not in byId or semanticRows([byId[row["recordId"]]]) != semanticRows([row]) for row in requested):
                 raise ValueError("Saved validation selection differs from the prepared manifest.")
             if saved.get("selectionMethod") == "fullPerTask" and (
                 len(requested) != len(byId) or {row["recordId"] for row in requested} != set(byId)
             ):
                 raise ValueError("Full per-task validation must retain every eligible record.")
-            rows = requested
+            rows = [byId[row["recordId"]] for row in requested]
         if not rows or any(row["origin"] != "own" for row in rows):
             raise ValueError("Evaluation requires eligible own validation records.")
         result[taskId] = {**task, "rows": sorted(rows, key=lambda row: row["recordId"])}
