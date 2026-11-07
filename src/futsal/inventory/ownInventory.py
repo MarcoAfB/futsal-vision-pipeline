@@ -21,13 +21,15 @@ def fileError(error: OSError | ValueError) -> str:
 
 
 def readReviewRegistry(catalog: Catalog, dataRoot: Path, issues: list[dict]) -> tuple[dict, dict]:
+    if catalog.data["schemaVersion"] == 2:
+        return {}, {"scope": "configuration", **catalog.configHashes[0]}
     relativePath = catalog.data["legacyReviewPath"]
     try:
         evidence = fileEvidence(dataRoot, relativePath)
         registryPath = resolveSourcePath(dataRoot, relativePath)
         registry = yaml.load(registryPath.read_text(encoding="utf-8-sig"), Loader=StrictLoader)
         if not isinstance(registry, dict) or not isinstance(registry.get("partidas"), dict):
-            raise ValueError("The legacy review registry must contain a partidas mapping.")
+            raise ValueError("The review registry must contain a partidas mapping.")
         return registry["partidas"], evidence
     except (OSError, ValueError, yaml.YAMLError) as error:
         addIssue(

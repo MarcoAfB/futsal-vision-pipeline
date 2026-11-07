@@ -18,7 +18,7 @@ def smallDataset(tmp_path, monkeypatch):
     configRoot.mkdir()
     (configRoot / "labelMap.yaml").write_bytes((projectRoot / "configs/labelMap.yaml").read_bytes())
     oldVideo = copy.deepcopy(catalog["ownVideos"][0])
-    oldVideo.update({"videoPath": "old.mp4", "annotationPath": "old.xml"})
+    oldVideo.update({"videoPath": "old.mp4", "annotationPath": "old.xml", "legacyMatchId": "Jogo1"})
     oldVideo["reviewedIntervals"][0]["endFrame"] = 1
     montage = copy.deepcopy(oldVideo)
     montage.update(
@@ -38,6 +38,7 @@ def smallDataset(tmp_path, monkeypatch):
     catalog.update(
         {
             "legacyReviewPath": "reviewed.yaml",
+            "schemaVersion": 1,
             "ownVideos": [oldVideo, montage],
             "publicSources": [],
             "syntheticSources": [],
@@ -153,7 +154,7 @@ def preparedSources(tmp_path):
         if source["sourceId"] == "futsalMot":
             content += "2 0.7 0.5 0.1 0.4\n"
         (directory / "image.txt").write_text(content, encoding="utf-8")
-    catalog.update(ownVideos=videos, publicSources=sources, syntheticSources=[],
+    catalog.update(schemaVersion=1, ownVideos=videos, publicSources=sources, syntheticSources=[],
                    legacyReviewPath="reviewed.yaml",
                    expected={"reviewedFrames": 6, "matchCount": 3, "videoCount": 3,
                              "reviewedIntervalCount": 3})

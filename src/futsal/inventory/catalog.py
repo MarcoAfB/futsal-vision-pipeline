@@ -1,5 +1,7 @@
 import hashlib
+import json
 from dataclasses import dataclass
+from functools import lru_cache
 from itertools import pairwise
 from pathlib import Path, PureWindowsPath
 
@@ -44,10 +46,31 @@ def relativePathValue(value: str) -> str:
 
 def resolveSourcePath(dataRoot: Path, relativePath: str) -> Path:
     root = dataRoot.resolve()
-    path = (root / relativePathValue(relativePath)).resolve()
+    relativePath = relativePathValue(relativePath)
+    path = (root / relativePath).resolve()
+    manifestPath = root / "sourceManifest.json"
+    if not path.exists() and manifestPath.is_file():
+        metadata = manifestPath.stat()
+        aliases = sourceAliases(manifestPath, metadata.st_mtime_ns, metadata.st_size)
+        path = (root / relativePathValue(aliases.get(relativePath, relativePath))).resolve()
     if not path.is_relative_to(root):
         raise ValueError("Source path escapes its declared root through a symbolic link.")
     return path
+
+
+@lru_cache(maxsize=8)
+def sourceAliases(manifestPath, modifiedAt, byteSize):
+    manifest = json.loads(manifestPath.read_text(encoding="utf-8"))
+    payload = {key: value for key, value in manifest.items() if key != "contractId"}
+    digest = hashlib.sha256(json.dumps(payload, sort_keys=True, ensure_ascii=False,
+        allow_nan=False, separators=(",", ":")).encode()).hexdigest()
+    if manifest.get("kind") != "rawDatasetSources" or manifest.get("schemaVersion") != 1 or manifest.get("contractId") != digest:
+        raise ValueError("Raw source manifest identity changed.")
+    aliases = manifest["sourceAliases"]
+    for original, target in aliases.items():
+        relativePathValue(original)
+        relativePathValue(target)
+    return aliases
 
 
 def readYaml(path: Path) -> tuple[dict, dict]:
@@ -149,7 +172,8 @@ def validateSources(data: dict, labels: dict) -> None:
         validateSourceMap(source, labels, "classId")
         if source["format"] != "yolo" or source["allowedUses"] != ["training"]:
             raise ValueError("External sources must use YOLO boxes and be training-only.")
-        for field in ("imageRoot", "labelRoot", "labelMapEvidence"):
+        fields = ("imageRoot", "labelRoot", "labelMapEvidence") if data["schemaVersion"] == 1 else ("imageRoot", "labelRoot", "recordNamespace")
+        for field in fields:
             relativePathValue(source[field])
         for metadataPath in source["metadataFiles"]:
             relativePathValue(metadataPath)
@@ -160,11 +184,14 @@ def loadCatalog(configPath: Path) -> Catalog:
         data, sourceHash = readYaml(configPath)
         labelPath = resolveSourcePath(configPath.parent, data["labelMapPath"])
         labels, labelHash = readYaml(labelPath)
-        if data["schemaVersion"] != 1 or labels["schemaVersion"] != 1:
-            raise ValueError("Only schemaVersion 1 is supported.")
+        if data["schemaVersion"] not in {1, 2} or labels["schemaVersion"] != 1:
+            raise ValueError("Unsupported source or label schema version.")
         validateLabels(labels)
         validateSources(data, labels)
-        relativePathValue(data["legacyReviewPath"])
+        if data["schemaVersion"] == 1:
+            relativePathValue(data["legacyReviewPath"])
+        elif data.get("reviewPolicy") != "catalogReviewedIntervals" or "legacyReviewPath" in data or any("legacyMatchId" in video for video in data["ownVideos"]):
+            raise ValueError("Native sources require the project's own reviewed interval declarations.")
         labelHash["path"] = relativePathValue(data["labelMapPath"])
         return Catalog(data, labels, [sourceHash, labelHash])
     except (KeyError, TypeError) as error:

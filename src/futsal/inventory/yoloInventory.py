@@ -30,7 +30,7 @@ def scanFiles(rootPath: Path) -> list[Path]:
         with os.scandir(directory) as entries:
             for entry in entries:
                 path = Path(entry.path)
-                if entry.is_symlink() and entry.is_dir():
+                if path.is_junction() or (entry.is_symlink() and entry.is_dir()):
                     raise ValueError("Directory symbolic links are not supported in source scans.")
                 if entry.is_dir(follow_symlinks=False):
                     pending.append(path)
@@ -48,7 +48,7 @@ def fingerprint(dataRoot: Path, relativePath: str) -> dict:
     return {"path": relativePath, "sha256": hashFile(path), "byteSize": path.stat().st_size}
 
 
-def readEvidence(source: dict, dataRoot: Path, report: dict, issues: list) -> None:
+def readEvidence(source: dict, dataRoot: Path, report: dict, issues: list, mappingEvidence=None) -> None:
     severity = "error" if source["required"] else "warning"
     for relativePath in source["metadataFiles"]:
         try:
@@ -62,6 +62,9 @@ def readEvidence(source: dict, dataRoot: Path, report: dict, issues: list) -> No
                 f"Cannot read registered metadata ({type(error).__name__}).",
                 path=relativePath,
             )
+    if mappingEvidence is not None:
+        report["labelMapEvidence"] = {"scope": "configuration", **mappingEvidence}
+        return
     relativePath = source["labelMapEvidence"]
     try:
         report["labelMapEvidence"] = fingerprint(dataRoot, relativePath)
@@ -127,7 +130,7 @@ def stemGroups(paths: list[Path], rootPath: Path) -> dict[str, list[Path]]:
     return dict(groups)
 
 
-def inventoryYoloSource(source: dict, labelMap: dict, dataRoot: Path) -> tuple[dict, list[dict]]:
+def inventoryYoloSource(source: dict, labelMap: dict, dataRoot: Path, mappingEvidence=None) -> tuple[dict, list[dict]]:
 
     dataRoot = Path(dataRoot).resolve()
     issues = []
@@ -148,7 +151,7 @@ def inventoryYoloSource(source: dict, labelMap: dict, dataRoot: Path) -> tuple[d
         "metadataFiles": [],
         "labelMapEvidence": None,
     }
-    readEvidence(source, dataRoot, report, issues)
+    readEvidence(source, dataRoot, report, issues, mappingEvidence)
     try:
         imageRoot = resolveSourcePath(dataRoot, source["imageRoot"])
         labelRoot = resolveSourcePath(dataRoot, source["labelRoot"])
@@ -270,8 +273,10 @@ def inventoryImages(
 ):
     for path in imagePaths:
         relativePath = sourceRelativePath(path, dataRoot)
+        recordPath = (f"{source['recordNamespace']}/{path.relative_to(imageRoot).as_posix()}"
+                      if "recordNamespace" in source else relativePath)
         sample = {
-            "recordId": f"{source['sourceId']}:{relativePath}",
+            "recordId": f"{source['sourceId']}:{recordPath}",
             "imagePath": relativePath,
             "labelPath": None,
             "labelSha256": None,

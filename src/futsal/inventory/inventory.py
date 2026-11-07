@@ -57,6 +57,10 @@ def buildInventory(dataRoot: Path, catalog: Catalog) -> dict:
     dataRoot = Path(dataRoot).resolve()
     if not dataRoot.is_dir():
         raise ValueError("dataRoot must be an existing directory.")
+    if (dataRoot / "sourceManifest.json").is_file():
+        from futsal.datasets.rawSources import verifyRawSources
+
+        verifyRawSources(dataRoot)
     issues: list[dict] = []
     registry, registryEvidence = readReviewRegistry(catalog, dataRoot, issues)
     videos = [
@@ -162,7 +166,8 @@ def inventoryExternalSources(catalog, dataRoot, issues):
     for category in ("publicSources", "syntheticSources"):
         for source in catalog.data.get(category, []):
             sourceReport, sourceIssues = inventoryYoloSource(
-                source, catalog.labels["labelMaps"][source["labelMapId"]], dataRoot
+                source, catalog.labels["labelMaps"][source["labelMapId"]], dataRoot,
+                catalog.configHashes[1] if catalog.data["schemaVersion"] == 2 else None,
             )
             sourceReport["origin"] = "public" if category == "publicSources" else "synthetic"
             externalSources.append(sourceReport)
