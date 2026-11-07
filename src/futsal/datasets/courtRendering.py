@@ -869,3 +869,172 @@ def drawPerson(
     cv2.circle(image, headCenter, headRadius, skin, -1, cv2.LINE_AA)
     cv2.circle(image, point(0.94), max(2, int(headRadius * 0.75)), (35, 40, 45), -1, cv2.LINE_AA)
     cv2.circle(occlusionMask, headCenter, headRadius + 1, 255, -1, cv2.LINE_AA)
+
+
+def drawHumanOccluders(
+    image: np.ndarray, camera: VirtualCamera, model: SynthesisModel, rng: np.random.Generator
+) -> tuple[np.ndarray, int]:
+    mask = np.zeros(image.shape[:2], np.uint8)
+    uniforms = uniformColors(rng)
+    targetX = float(camera.target[0])
+    candidatos: list[tuple[float, np.ndarray, np.ndarray, tuple[int, int, int]]] = []
+    outfieldCount = int(rng.integers(7, 11))
+    positions: list[tuple[float, float, int]] = []
+    for index in range(outfieldCount):
+        for _ in range(30):
+            x = float(np.clip(rng.normal(targetX, 7.5), 0.8, model.length - 0.8))
+            y = float(rng.uniform(1.0, model.width - 1.0))
+            if all((math.hypot(x - px, y - py) >= 0.85 for px, py, _ in positions)):
+                positions.append((x, y, index % 2))
+                break
+    if rng.random() < 0.86:
+        positions.append((float(rng.uniform(0.4, 2.0)), float(rng.uniform(7.7, 12.3)), 2))
+    if rng.random() < 0.86:
+        positions.append(
+            (
+                float(rng.uniform(model.length - 2.0, model.length - 0.4)),
+                float(rng.uniform(7.7, 12.3)),
+                3,
+            )
+        )
+    for x, y, team in positions:
+        heightMeters = float(rng.uniform(1.62, 1.91))
+        points, depths = project3d(np.asarray([[x, y, 0.0], [x, y, heightMeters]]), camera, False)
+        if np.any(depths <= 0) or not np.isfinite(points).all():
+            continue
+        base, top = points
+        heightPixels = float(np.linalg.norm(top - base))
+        if heightPixels < 25:
+            continue
+        margin = heightPixels * 0.25
+        if not (
+            -margin <= base[0] <= image.shape[1] + margin
+            and -margin <= base[1] <= image.shape[0] + margin
+        ):
+            continue
+        candidatos.append((float(depths[0]), base, top, uniforms[team]))
+    for _, base, top, uniform in sorted(candidatos, reverse=True, key=lambda item: item[0]):
+        drawPerson(image, mask, base, top, uniform, rng)
+    if rng.random() < 0.72:
+        for _ in range(int(rng.integers(2, 6))):
+            x = float(np.clip(rng.normal(targetX, 5.5), 0.5, model.length - 0.5))
+            y = model.width + float(rng.uniform(0.7, 1.8))
+            points, depths = project3d(
+                np.asarray([[x, y, 0.0], [x, y, rng.uniform(1.55, 1.85)]]), camera, False
+            )
+            if np.all(depths > 0) and np.isfinite(points).all():
+                drawPerson(image, mask, points[0], points[1], (45, 55, 65), rng)
+    return (mask, len(candidatos))
+
+
+def distortionMaps(camera: VirtualCamera, width: int, height: int) -> tuple[np.ndarray, np.ndarray]:
+    yy, xx = np.mgrid[0:height, 0:width].astype(np.float32)
+    fx = float(camera.intrinsicMatrix[0, 0])
+    fy = float(camera.intrinsicMatrix[1, 1])
+    cx = float(camera.intrinsicMatrix[0, 2])
+    cy = float(camera.intrinsicMatrix[1, 2])
+    xd = (xx - cx) / fx
+    yd = (yy - cy) / fy
+    xu = xd.copy()
+    yu = yd.copy()
+    k1, k2, p1, p2 = camera.distortion
+    for _ in range(6):
+        radius2 = xu * xu + yu * yu
+        radial = 1.0 + k1 * radius2 + k2 * radius2 * radius2
+        estimatedX = xu * radial + 2 * p1 * xu * yu + p2 * (radius2 + 2 * xu * xu)
+        estimatedY = yu * radial + p1 * (radius2 + 2 * yu * yu) + 2 * p2 * xu * yu
+        xu += xd - estimatedX
+        yu += yd - estimatedY
+    return ((fx * xu + cx).astype(np.float32), (fy * yu + cy).astype(np.float32))
+
+
+def applyDistortion(
+    image: np.ndarray, mask: np.ndarray, camera: VirtualCamera
+) -> tuple[np.ndarray, np.ndarray]:
+    height, width = image.shape[:2]
+    mapX, mapY = distortionMaps(camera, width, height)
+    distortedImage = cv2.remap(
+        image,
+        mapX,
+        mapY,
+        cv2.INTER_LINEAR,
+        borderMode=cv2.BORDER_CONSTANT,
+        borderValue=(20, 22, 24),
+    )
+    distortedMask = cv2.remap(
+        mask, mapX, mapY, cv2.INTER_NEAREST, borderMode=cv2.BORDER_CONSTANT, borderValue=0
+    )
+    return (distortedImage, distortedMask)
+
+
+def motionKernel(size: int, angleDegrees: float) -> np.ndarray:
+    kernel = np.zeros((size, size), np.float32)
+    center = (size - 1) / 2
+    length = (size - 1) / 2
+    angle = math.radians(angleDegrees)
+    dx = math.cos(angle) * length
+    dy = math.sin(angle) * length
+    cv2.line(
+        kernel,
+        (int(round(center - dx)), int(round(center - dy))),
+        (int(round(center + dx)), int(round(center + dy))),
+        1.0,
+        1,
+        cv2.LINE_AA,
+    )
+    total = float(kernel.sum())
+    return kernel / total if total > 0 else np.eye(size, dtype=np.float32)
+
+
+def applyPhotometryAndVideo(
+    image: np.ndarray, rng: np.random.Generator
+) -> tuple[np.ndarray, Mapping[str, Any]]:
+    resultado = image.astype(np.float32) / 255.0
+    gamma = float(rng.uniform(0.78, 1.28))
+    exposure = float(rng.uniform(0.78, 1.28))
+    contrast = float(rng.uniform(0.86, 1.15))
+    balance = rng.uniform(0.9, 1.11, 3).astype(np.float32)
+    resultado = np.power(np.clip(resultado, 0, 1), gamma)
+    resultado = (resultado - 0.5) * contrast + 0.5
+    resultado *= exposure * balance[None, None, :]
+    height, width = resultado.shape[:2]
+    yy, xx = np.mgrid[-1 : 1 : complex(0, height), -1 : 1 : complex(0, width)]
+    vignetteStrength = float(rng.uniform(0.0, 0.18))
+    vignette = 1.0 - vignetteStrength * np.clip(xx * xx + yy * yy, 0, 1)
+    resultado *= vignette[..., None]
+    resultado = np.clip(resultado * 255.0, 0, 255).astype(np.uint8)
+    motionBlur = 0
+    motionAngle = 0.0
+    if rng.random() < 0.32:
+        motionBlur = int(rng.choice(np.asarray([3, 5, 7])))
+        motionAngle = float(rng.uniform(-22.0, 22.0))
+        resultado = cv2.filter2D(resultado, -1, motionKernel(motionBlur, motionAngle))
+    blurSigma = float(rng.uniform(0.35, 1.15))
+    resultado = cv2.GaussianBlur(resultado, (0, 0), blurSigma)
+    ycrcb = cv2.cvtColor(resultado, cv2.COLOR_BGR2YCrCb)
+    for channel in (1, 2):
+        reduced = cv2.resize(
+            ycrcb[..., channel],
+            (max(1, width // 2), max(1, height // 2)),
+            interpolation=cv2.INTER_AREA,
+        )
+        ycrcb[..., channel] = cv2.resize(reduced, (width, height), interpolation=cv2.INTER_LINEAR)
+    resultado = cv2.cvtColor(ycrcb, cv2.COLOR_YCrCb2BGR)
+    noiseSigma = float(rng.uniform(0.3, 2.4))
+    noise = rng.normal(0.0, noiseSigma, resultado.shape).astype(np.float32)
+    resultado = np.clip(resultado.astype(np.float32) + noise, 0, 255).astype(np.uint8)
+    return (
+        resultado,
+        {
+            "gamma": gamma,
+            "exposure": exposure,
+            "contrast": contrast,
+            "bgrBalance": [float(v) for v in balance],
+            "vignette": vignetteStrength,
+            "motionBlurKernel": motionBlur,
+            "motionBlurAngle": motionAngle,
+            "defocusSigma": blurSigma,
+            "noiseSigma": noiseSigma,
+            "chroma420Aproximado": True,
+        },
+    )
