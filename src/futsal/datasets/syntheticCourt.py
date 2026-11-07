@@ -1,11 +1,15 @@
+import hashlib
+import json
 import math
+from collections import Counter
 from pathlib import Path
 
 import cv2
 
-from futsal.annotations.detectionGeometry import annotationBox
+from futsal.annotations.detectionGeometry import annotationBox, renderYoloLabels
 from futsal.datasets.courtRendering import LabeledReference, SynthesisModel
-from futsal.inventory.catalog import hashFile, readYaml
+from futsal.datasets.datasetFiles import hashJson, readJson, verifyEvidence
+from futsal.inventory.catalog import hashFile, readYaml, resolveSourcePath
 from futsal.inventory.yoloInventory import scanFiles
 
 projectRoot = Path(__file__).resolve().parents[3]
@@ -186,3 +190,114 @@ def encodeJpeg(image, quality):
     if not success:
         raise ValueError("Cannot encode a synthetic image.")
     return data.tobytes()
+
+
+def validateSyntheticSnapshot(contract, rows, classes):
+    if (
+        contract.get("kind") != "syntheticCourtDataset"
+        or contract.get("schemaVersion") != 1
+        or contract.get("trainingOnly") is not True
+        or contract.get("pointBoxes") != pointBoxes
+        or contract.get("classes") != classes
+    ):
+        raise ValueError("Synthetic source must be a training-only canonical court dataset.")
+    if contract["contractId"] != hashJson({k: v for k, v in contract.items() if k != "contractId"}):
+        raise ValueError("Synthetic contract checksum mismatch.")
+    config = contract["configuration"]
+    model = synthesisModel(config)
+    if len(rows) != config["count"] or not rows:
+        raise ValueError("Synthetic manifest count differs from its contract.")
+    identity = {
+        "configuration": config,
+        "generator": contract["generator"],
+        "classes": classes,
+        "pointBoxes": pointBoxes,
+    }
+    if contract["generationId"] != hashJson(identity):
+        raise ValueError("Synthetic generation identity mismatch.")
+    counts = Counter()
+    for index, row in enumerate(rows):
+        stem = f"syntheticCourt{index:06d}"
+        if row["recordId"] != f"syntheticCourt:{contract['generationId']}:{index:06d}" or any(
+            row.get(key) != value
+            for key, value in {
+                "origin": "synthetic",
+                "sourceId": "syntheticCourt",
+                "taskId": "courtPoints",
+                "split": "training",
+                "dimensions": [config["width"], config["height"]],
+                "imagePath": f"images/train/{stem}.jpg",
+                "labelPath": f"labels/train/{stem}.txt",
+            }.items()
+        ):
+            raise ValueError("Synthetic record identity, paths or development membership changed.")
+        points = row["metadata"]["visiblePoints"]
+        ids = [p["classId"] for p in points]
+        if (
+            not 4 <= len(ids) <= 11
+            or len(set(ids)) != len(ids)
+            or any(
+                type(i) is not int
+                or not 0 <= i < 20
+                or p["className"] != classes[i]
+                or p["courtMeters"] != list(model.references[i].coordinate)
+                or len(p["imagePixels"]) != 2
+                or any(
+                    not math.isfinite(v) or not 0 <= v < bound
+                    for v, bound in zip(p["imagePixels"], row["dimensions"], strict=True)
+                )
+                for i, p in zip(ids, points, strict=True)
+            )
+        ):
+            raise ValueError("Invalid synthetic native point annotations.")
+        if row["targets"] != derivedTargets(points, row["dimensions"]):
+            raise ValueError("Synthetic detection boxes differ from their native points.")
+        if (
+            row["labelSha256"]
+            != hashlib.sha256(renderYoloLabels(row["targets"]).encode()).hexdigest()
+        ):
+            raise ValueError("Synthetic labels differ from native-derived boxes.")
+        counts.update(ids)
+    if len(rows) >= 20 and set(counts) != set(range(20)):
+        raise ValueError("Synthetic generation lost court class coverage.")
+    return counts
+
+
+def readSyntheticManifest(root):
+    return [
+        json.loads(line)
+        for line in (Path(root) / "manifest.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+
+
+def verifySyntheticCourt(datasetDir):
+    root = Path(datasetDir).resolve()
+    contract, rows = readJson(root / "contract.json"), readSyntheticManifest(root)
+    counts = validateSyntheticSnapshot(contract, rows, courtClassNames())
+    expected = {item["path"] for item in contract["artifactEvidence"]} | {"contract.json"}
+    if len(expected) != len(contract["artifactEvidence"]) + 1:
+        raise ValueError("Synthetic evidence contains duplicate or self-referential paths.")
+    if {p.relative_to(root).as_posix() for p in scanFiles(root)} != expected:
+        raise ValueError("Synthetic dataset has missing or unexpected files.")
+    verifyEvidence(root, contract["artifactEvidence"])
+    allowed = {"contract.json", "manifest.jsonl", "summary.json", "configuration.json"}
+    for index, row in enumerate(rows):
+        image = cv2.imread(str(resolveSourcePath(root, row["imagePath"])))
+        if image is None or [image.shape[1], image.shape[0]] != row["dimensions"]:
+            raise ValueError("Synthetic image cannot be decoded at its declared dimensions.")
+        for kind in ("image", "label"):
+            if hashFile(root / row[f"{kind}Path"]) != row[f"{kind}Sha256"]:
+                raise ValueError("Synthetic manifest file hash mismatch.")
+            allowed.add(row[f"{kind}Path"])
+        if index < contract["configuration"]["debugCount"]:
+            allowed.add(f"debug/syntheticCourt{index:06d}.jpg")
+    if expected != allowed or readJson(root / "configuration.json") != contract["configuration"]:
+        raise ValueError("Synthetic file layout or configuration differs from its contract.")
+    summary = {
+        "imageCount": len(rows),
+        "trainingOnly": True,
+        "support": {name: counts[i] for i, name in enumerate(contract["classes"])},
+    }
+    if readJson(root / "summary.json") != summary:
+        raise ValueError("Synthetic support summary differs from its native annotations.")
+    return contract
