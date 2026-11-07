@@ -38,17 +38,24 @@ def initializeBackend(runtimeDir, numThreads):
 def verifyLoader(dataset, task, split, runDir):
     import numpy as np
 
-    expected = {(Path(runDir) / "runtimeData" / row["imagePath"]).resolve(): row
-                for row in task[split]}
-    actual = {Path(label["im_file"]).resolve(): label for label in dataset.labels}
+    from futsal.annotations.detectionGeometry import renderYoloLabels
+
+    if hasattr(dataset, "sharedRows"):
+        expected = {row["recordId"]: row for row in task[split]}
+        actual = {label["recordId"]: label for label in dataset.labels}
+    else:
+        expected = {(Path(runDir) / "runtimeData" / row["imagePath"]).resolve(): row
+                    for row in task[split]}
+        actual = {Path(label["im_file"]).resolve(): label for label in dataset.labels}
     if set(actual) != set(expected) or len(dataset.labels) != len(expected):
         raise ValueError(f"Native loader changed {split} image membership.")
     for path, label in actual.items():
         row = expected[path]
-        content = (Path(runDir) / "runtimeData" / row["labelPath"]).read_text().splitlines()
-        wanted = np.array(sorted(tuple(map(float, line.split())) for line in content))
+        content = (renderYoloLabels(row["targets"]).splitlines() if hasattr(dataset, "sharedRows") else
+                   (Path(runDir) / "runtimeData" / row["labelPath"]).read_text().splitlines())
+        wanted = np.array(sorted(tuple(map(float, line.split())) for line in content)).reshape(-1, 5)
         observed = np.concatenate((label["cls"], label["bboxes"]), axis=1)
-        observed = np.array(sorted(map(tuple, observed)))
+        observed = np.array(sorted(map(tuple, observed))).reshape(-1, 5)
         if wanted.shape != observed.shape or not np.allclose(wanted, observed, rtol=0, atol=1e-6):
             raise ValueError(f"Native loader discarded or changed annotations: {row['recordId']}.")
     return {"imageCount": len(actual), "annotationsVerified": True}
@@ -95,6 +102,14 @@ def trainNativeStage(config, task, stage, inputWeights, stageDir, runDir, runtim
     stageDir, runDir = Path(stageDir), Path(runDir)
 
     class AuditedDetectionTrainer(DetectionTrainer):
+        def build_dataset(self, img_path, mode="train", batch=None):
+            from ultralytics.utils.torch_utils import unwrap_model
+
+            from futsal.training.sharedRuntime import buildRuntimeDataset
+
+            stride = max(int(unwrap_model(self.model).stride.max()), 32)
+            return buildRuntimeDataset(self.args, runDir, stage["taskId"], self.data, batch, mode, stride)
+
         def run_callbacks(self, event):
             for key, values in self.callbacks.items():
                 self.callbacks[key] = [callback for callback in values if callback.__module__ in

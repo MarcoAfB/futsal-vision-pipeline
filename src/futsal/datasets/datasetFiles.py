@@ -63,9 +63,10 @@ def stagedDirectory(outputDir, sourceRoot, protectedPaths=()):
 
 def verifyEvidence(root, evidence):
     for item in evidence:
-        path = resolveSourcePath(Path(root), item["path"])
+        path = (Path(item["assetPath"]) if item.get("kind") == "sharedMediaAsset"
+                else resolveSourcePath(Path(root), item["path"]))
         if path.stat().st_size != item["byteSize"] or hashFile(path) != item["sha256"]:
-            raise ValueError(f"Input changed since planning: {item['path']}.")
+            raise ValueError(f"Input changed since planning: {path}.")
 
 
 def sourceEvidence(inventory, samples, dataRoot):
