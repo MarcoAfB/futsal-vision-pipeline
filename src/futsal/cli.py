@@ -8,6 +8,13 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Futsal dataset research tools.")
     parser.add_argument("--version", action="version", version=f"futsal {__version__}")
     commands = parser.add_subparsers(dest="command")
+    rawParser = commands.add_parser("importRawSources", help="Copy and verify registered real raw inputs.")
+    rawParser.add_argument("--sourceRoot", type=Path, required=True)
+    rawParser.add_argument("--config", type=Path, default=Path("configs/dataSources.yaml"))
+    rawParser.add_argument("--outputDir", type=Path, default=Path("data/raw"))
+    rawParser.add_argument("--catalogOutput", type=Path, required=True)
+    rawVerifyParser = commands.add_parser("verifyRawSources", help="Verify local raw source membership and hashes.")
+    rawVerifyParser.add_argument("--dataRoot", type=Path, default=Path("data/raw"))
     inventoryParser = commands.add_parser("inventory", help="Audit registered source data.")
     inventoryParser.add_argument(
         "--dataRoot",
@@ -67,6 +74,30 @@ def main(argv: list[str] | None = None) -> int:
     if arguments.command is None:
         parser.print_help()
         return 0
+    if arguments.command in {"importRawSources", "verifyRawSources"}:
+        from futsal.datasets.rawSources import importRawSources, verifyRawSources
+        from futsal.inventory.catalog import loadCatalog
+
+        try:
+            if arguments.command == "importRawSources":
+                import yaml
+
+                from futsal.datasets.datasetFiles import validateNewOutput
+
+                catalogOutput = arguments.catalogOutput.resolve()
+                project = Path(__file__).resolve().parents[2]
+                for protected in (arguments.sourceRoot, arguments.outputDir, project / "src", project / "configs"):
+                    validateNewOutput(catalogOutput, protected)
+                result = importRawSources(loadCatalog(arguments.config), arguments.sourceRoot, arguments.outputDir)
+                catalogOutput.parent.mkdir(parents=True, exist_ok=True)
+                with catalogOutput.open("x", encoding="utf-8", newline="\n") as stream:
+                    yaml.safe_dump(result["catalog"], stream, sort_keys=False, allow_unicode=True)
+            else:
+                result = verifyRawSources(arguments.dataRoot)
+            print(f"Raw source contract: {result['contractId']}; files: {len(result['artifacts'])}")
+            return 0
+        except (OSError, ValueError, KeyError) as error:
+            parser.exit(2, f"Raw source operation could not complete: {error}\n")
     if arguments.command in {"prepareProjection", "materializeProjection"}:
         from futsal.datasets.datasetProjection import materializeProjection, prepareProjection
 
