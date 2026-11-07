@@ -1,10 +1,14 @@
+import shutil
 from pathlib import Path
 
-from futsal.datasets.datasetFiles import hashJson, readJson
+from futsal.datasets.datasetFiles import hashJson, readJson, writeJson
 from futsal.datasets.syntheticCourt import validateSyntheticSnapshot
-from futsal.evaluation.evaluationData import readJsonLines
+from futsal.evaluation.configurationComparison import comparisonMetrics
+from futsal.evaluation.evaluationData import readJsonLines, validateResearchOutput
+from futsal.evaluation.evaluationRun import sealEvaluation
 from futsal.inventory.catalog import hashFile
 from futsal.reporting.researchReport import verifyEvaluation
+from futsal.training.trainingRun import utcNow
 
 
 def courtEvaluation(root):
@@ -131,3 +135,57 @@ def courtComparisonInputs(baselineDir, candidateDir):
     if sorted(actual, key=lambda r: r["recordId"]) != sorted(expected, key=lambda r: r["recordId"]):
         raise ValueError("Mixed training differs from the exact archived synthetic source.")
     return before, after
+
+
+def compareCourtTraining(baselineEvaluationDir, candidateEvaluationDir, outputDir):
+    first, second = Path(baselineEvaluationDir).resolve(), Path(candidateEvaluationDir).resolve()
+    output = validateResearchOutput(outputDir, [first, second])
+    before, after = courtComparisonInputs(first, second)
+    values = [before[4], after[4]]
+    metrics = comparisonMetrics(values, before[0]["protocol"])
+    metrics["byMatch"] = {
+        matchId: comparisonMetrics(
+            [
+                {
+                    "detection": value["detection"]["byMatch"][matchId],
+                    "points": value["points"]["byMatch"][matchId],
+                }
+                for value in values
+            ],
+            before[0]["protocol"],
+        )
+        for matchId in values[0]["points"]["byMatch"]
+    }
+    output.mkdir(parents=True)
+    for name, source in (("baseline", first), ("candidate", second)):
+        target = output / "evidence" / name
+        target.mkdir(parents=True)
+        shutil.copytree(source / "evidence", target / "evidence")
+        for filename in ("evaluation.json", "evaluationContract.json"):
+            shutil.copyfile(source / filename, target / filename)
+    writeJson(output / "evidence/comparisonMetrics.json", metrics)
+    state = {
+        "schemaVersion": 1,
+        "kind": "courtTrainingComparison",
+        "status": "completed",
+        "startedAt": utcNow(),
+        "purpose": "scientificTraining",
+        "selection": "fullValidation",
+        "testEvaluated": False,
+        "singleSeed": before[0]["training"]["configuration"]["seed"],
+        "baselineContractId": before[1]["contractId"],
+        "candidateContractId": after[1]["contractId"],
+        "classes": before[2]["classes"],
+        "protocol": before[0]["protocol"],
+        "trainingRunHashes": [v[0]["trainingRunSha256"] for v in (before, after)],
+        "trainingCosts": [
+            v[0]["training"]["stages"][0]["results"]["training"] for v in (before, after)
+        ],
+    }
+    archived = courtComparisonInputs(output / "evidence/baseline", output / "evidence/candidate")
+    if [v[1] for v in archived] != [before[1], after[1]] or [
+        verifyEvaluation(p)[1] for p in (first, second)
+    ] != [before[1], after[1]]:
+        raise ValueError("Court evaluations changed during comparison publication.")
+    sealEvaluation(output, state)
+    return state

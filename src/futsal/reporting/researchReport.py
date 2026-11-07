@@ -329,6 +329,10 @@ def updateReportIndex(root):
 def renderReport(evaluationDir, outputDir=None):
     source = Path(evaluationDir).resolve()
     state, contract = verifyEvaluation(source)
+    if state.get("kind") == "courtTrainingComparison":
+        from futsal.reporting.courtComparisonReport import renderCourtComparison
+
+        return renderCourtComparison(source, outputDir)
     if state.get("kind") == "configurationComparison":
         from futsal.reporting.comparisonReport import renderComparisonReport
 
