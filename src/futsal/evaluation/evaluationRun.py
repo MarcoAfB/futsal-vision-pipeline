@@ -38,14 +38,16 @@ def newEvaluationPath(runDir, selection="runValidation", reportRoot=None):
     return root / runDir.name / f"{selection}-{stamp}"
 
 
-def archiveExamples(datasetDir, outputDir, selected, references):
+def archiveExamples(datasetDir, outputDir, selected, references, *, mediaStoreDir=None):
     byId = {row["recordId"]: row for row in references}
     root = outputDir / "evidence" / "exampleImages"
     root.mkdir(exist_ok=True)
     result = []
     for item in selected:
         reference = byId[item["recordId"]]
-        source = resolveSourcePath(datasetDir, reference["imagePath"])
+        from futsal.datasets.sharedViews import resolveRowImage
+
+        source = resolveRowImage(datasetDir, reference, mediaStoreDir)
         target = root / f"{reference['imageSha256']}{source.suffix.lower()}"
         if not target.exists():
             shutil.copyfile(source, target)
@@ -56,7 +58,7 @@ def archiveExamples(datasetDir, outputDir, selected, references):
     return result
 
 
-def evaluateStage(datasetDir, runDir, outputDir, workDir, task, references, stage, state, fixedIds):
+def evaluateStage(datasetDir, runDir, outputDir, workDir, task, references, stage, state, fixedIds, *, mediaStoreDir=None):
     taskId, config = task["taskId"], state["protocol"]
     evidenceDir = outputDir / "evidence" / taskId
     evidenceDir.mkdir()
@@ -66,7 +68,12 @@ def evaluateStage(datasetDir, runDir, outputDir, workDir, task, references, stag
         raise ValueError("Selected best checkpoint changed since training.")
     writeJsonLines(evidenceDir / "references.jsonl", references)
     selection = {"tasks": {taskId: {"classes": task["classes"], "training": [], "validation": task["rows"]}}}
-    runtimeEvidence = copyRuntimeData(datasetDir, workDir, selection)
+    if mediaStoreDir is not None:
+        from futsal.training.sharedRuntime import prepareSharedRuntime
+
+        runtimeEvidence = prepareSharedRuntime(mediaStoreDir, workDir, selection)
+    else:
+        runtimeEvidence = copyRuntimeData(datasetDir, workDir, selection)
     writeJson(evidenceDir / "runtimeEvidence.json", runtimeEvidence)
     predictions, native = predictValidation(checkpoint, task, references, stage,
                                             state["training"]["configuration"], config, workDir)
@@ -80,7 +87,7 @@ def evaluateStage(datasetDir, runDir, outputDir, workDir, task, references, stag
     writeJson(evidenceDir / "detection.json", detection)
     writeJson(evidenceDir / "points.json", points)
     selected = selectExamples(fixedIds, detection, points, config)
-    examples = archiveExamples(datasetDir, outputDir, selected, references)
+    examples = archiveExamples(datasetDir, outputDir, selected, references, mediaStoreDir=mediaStoreDir)
     for name in ("results.csv", "transferAudit.json", "loaderAudit.json", "optimizer.json"):
         source = resolveSourcePath(runDir, f"{stage['directory']}/{name}")
         if source.is_file():
@@ -104,8 +111,12 @@ def sealEvaluation(outputDir, state):
     writeJson(outputDir / "evaluationContract.json", contract)
 
 
-def evaluateRun(runDir, datasetDir, configPath, selection, outputDir, progress=print, *, workRoot=None):
+def evaluateRun(runDir, datasetDir, configPath, selection, outputDir, progress=print, *, workRoot=None, mediaStoreDir=None):
     runDir, datasetDir = Path(runDir).resolve(), Path(datasetDir).resolve()
+    from futsal.datasets.mediaStore import isSharedView
+
+    if isSharedView(datasetDir) and mediaStoreDir is None:
+        raise ValueError("Shared evaluation requires --mediaStoreDir.")
     outputDir = validateResearchOutput(outputDir, [datasetDir, runDir], [Path(configPath)])
     config = loadEvaluationConfig(configPath)
     run = readJson(runDir / "run.json")
@@ -113,12 +124,20 @@ def evaluateRun(runDir, datasetDir, configPath, selection, outputDir, progress=p
         raise ValueError("Run has no verified dataset selection; use reportRun --runDir for execution diagnostics.")
     plan, tasks = evaluationTasks(datasetDir, runDir, run, selection)
     contract = readJson(datasetDir / "contract.json")
-    if contract["contractId"] != run["contractId"] or contract["contractId"] != hashJson({
+    from futsal.datasets.sharedEquivalence import verifyRunView
+
+    equivalence = verifyRunView(runDir, datasetDir, run)
+    if contract["contractId"] != hashJson({
         key: value for key, value in contract.items() if key != "contractId"
     }):
         raise ValueError("Evaluation dataset contract differs from the verified training input.")
     workRoot = Path(workRoot).resolve() if workRoot is not None else Path(futsal.__file__).resolve().parents[2] / "outputs" / "evaluationWork"
     workDir = workRoot / hashJson(str(outputDir))[:16]
+    if mediaStoreDir is not None:
+        from futsal.datasets.mediaStore import protectMediaOutput
+
+        protectMediaOutput(outputDir, mediaStoreDir)
+        protectMediaOutput(workDir, mediaStoreDir)
     validateResearchOutput(workDir, [datasetDir, runDir, outputDir], [Path(configPath)])
     validateResearchOutput(outputDir, [datasetDir, runDir, workDir], [Path(configPath)])
     outputDir.mkdir(parents=True)
@@ -130,12 +149,14 @@ def evaluateRun(runDir, datasetDir, configPath, selection, outputDir, progress=p
              "selection": selection, "protocol": config, "protocolId": hashJson(config),
              "training": run, "trainingDirectory": str(runDir), "trainingRunId": runDir.name,
              "trainingRunSha256": hashFile(runDir / "run.json"),
-             "contractId": contract["contractId"], "pointClasses": pointClasses, "testEvaluated": False,
+             "contractId": run["contractId"], "pointClasses": pointClasses, "testEvaluated": False,
              "stages": [{"taskId": taskId, "status": "notEvaluated"} for taskId in tasks],
              "datasetSummary": contract["summary"], "ownSplitSummaries": plan["ownSplitSummaries"],
              "reviewedOwnRecordCount": plan["catalog"]["data"]["expected"]["reviewedFrames"],
              "environment": packageVersions(), "workDirectory": str(workDir)}
     state["requestedDevice"] = run["configuration"].get("evaluationDevice", "cpu")
+    if equivalence is not None:
+        state["datasetEquivalence"] = equivalence
     saveEvaluation(outputDir, state)
     contractHash = hashFile(datasetDir / "contract.json")
     current = None
@@ -149,7 +170,8 @@ def evaluateRun(runDir, datasetDir, configPath, selection, outputDir, progress=p
             for name in ("syntheticContract.json", "syntheticManifest.jsonl"):
                 shutil.copyfile(runDir / "inputs" / name, outputDir / "evidence" / name)
         progress("Checking the prepared bundle and archived training artifacts before evaluation...")
-        state["bundleBefore"] = verifyBundleUnchanged(datasetDir, contract, contractHash)
+        integrityOptions = {"mediaStoreDir": mediaStoreDir} if mediaStoreDir is not None else {}
+        state["bundleBefore"] = verifyBundleUnchanged(datasetDir, contract, contractHash, **integrityOptions)
         verifyEvidence(runDir, run["artifacts"])
         if state["requestedDevice"] != "cpu":
             state["deviceInspection"] = inspectEnvironment(state["requestedDevice"])
@@ -170,7 +192,7 @@ def evaluateRun(runDir, datasetDir, configPath, selection, outputDir, progress=p
             progress(f"Evaluating {taskId}: {len(tasks[taskId]['rows'])} {selection} images...")
             references = buildReferences(plan, tasks[taskId])
             current.update(evaluateStage(datasetDir, runDir, outputDir, workDir, tasks[taskId], references,
-                                         stage, state, fixedIds))
+                                         stage, state, fixedIds, mediaStoreDir=mediaStoreDir))
             saveEvaluation(outputDir, state)
         state["status"] = "completed" if all(s["status"] == "completed" for s in state["stages"]) else "partial"
     except (Exception, KeyboardInterrupt) as error:
@@ -182,7 +204,8 @@ def evaluateRun(runDir, datasetDir, configPath, selection, outputDir, progress=p
     finally:
         try:
             progress("Checking prepared bundle integrity after evaluation...")
-            state["bundleAfter"] = verifyBundleUnchanged(datasetDir, contract, contractHash)
+            integrityOptions = {"mediaStoreDir": mediaStoreDir} if mediaStoreDir is not None else {}
+            state["bundleAfter"] = verifyBundleUnchanged(datasetDir, contract, contractHash, **integrityOptions)
             for path in (outputDir / "evidence").glob("*/runtimeEvidence.json"):
                 verifyEvidence(workDir, readJson(path))
             state["runtimeAfter"] = True

@@ -9,7 +9,7 @@ from futsal.training.trainingConfig import stageParameters
 def predictValidation(checkpoint, task, references, stage, trainingConfig, config, workDir):
     import torch
     from ultralytics.cfg import get_cfg
-    from ultralytics.data import build_dataloader, build_yolo_dataset
+    from ultralytics.data import build_dataloader
     from ultralytics.models.yolo.detect import DetectionValidator
     from ultralytics.nn.tasks import load_checkpoint
 
@@ -31,13 +31,15 @@ def predictValidation(checkpoint, task, references, stage, trainingConfig, confi
     model.args = args
     data = {"names": dict(enumerate(names)), "nc": len(names), "channels": 3,
             "val": str(root / "images" / "val"), "path": str(root)}
-    dataset = build_yolo_dataset(args, data["val"], args.batch * 2, data, mode="val", rect=True,
-                                 stride=int(model.stride.max()))
+    from futsal.training.sharedRuntime import buildRuntimeDataset
+
+    dataset = buildRuntimeDataset(args, workDir, task["taskId"], data, args.batch * 2, "val", int(model.stride.max()))
     taskRows = {"validation": task["rows"]}
     writeJson(workDir / f"{task['taskId']}LoaderAudit.json", verifyLoader(dataset, taskRows, "validation", workDir))
     loader = build_dataloader(dataset, batch=args.batch * 2, workers=0, shuffle=False,
                               rank=-1, device=device)
     expected = {(workDir / "runtimeData" / row["imagePath"]).resolve(): row for row in references}
+    byRecord = {row["recordId"]: row for row in references}
     predictions = []
 
     class CapturingValidator(DetectionValidator):
@@ -47,7 +49,8 @@ def predictValidation(checkpoint, task, references, stage, trainingConfig, confi
         def update_metrics(self, preds, batch):
             for index, pred in enumerate(preds):
                 prepared = self._prepare_batch(index, batch)
-                reference = expected[Path(prepared["im_file"]).resolve()]
+                reference = (byRecord[batch["recordId"][index]] if "recordId" in batch else
+                             expected[Path(prepared["im_file"]).resolve()])
                 scaled = self.scale_preds(self._prepare_pred(pred), prepared)
                 detections = [{"classId": int(classId), "className": names[int(classId)],
                                "confidence": float(confidence), "box": box.tolist()}
