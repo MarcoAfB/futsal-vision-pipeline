@@ -1038,3 +1038,102 @@ def applyPhotometryAndVideo(
             "chroma420Aproximado": True,
         },
     )
+
+
+def drawBroadcastOverlays(
+    image: np.ndarray, mask: np.ndarray, rng: np.random.Generator
+) -> Mapping[str, bool]:
+    height, width = image.shape[:2]
+    hasScoreboard = bool(rng.random() < 0.92)
+    hasWatermark = bool(rng.random() < 0.88)
+    if hasScoreboard:
+        x1 = int(width * rng.uniform(0.018, 0.055))
+        y1 = int(height * rng.uniform(0.018, 0.052))
+        w = int(width * rng.uniform(0.16, 0.25))
+        h = int(height * rng.uniform(0.055, 0.09))
+        overlay = image.copy()
+        cv2.rectangle(overlay, (x1, y1), (x1 + w, y1 + h), (24, 42, 82), -1)
+        cv2.rectangle(overlay, (x1 + w // 3, y1), (x1 + 2 * w // 3, y1 + h), (230, 190, 45), -1)
+        cv2.addWeighted(overlay, 0.9, image, 0.1, 0, image)
+        cv2.putText(
+            image,
+            f"{int(rng.integers(0, 6))}  -  {int(rng.integers(0, 6))}",
+            (x1 + int(w * 0.36), y1 + int(h * 0.67)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            max(0.35, width / 3600),
+            (245, 245, 245),
+            max(1, width // 960),
+            cv2.LINE_AA,
+        )
+        cv2.rectangle(mask, (x1, y1), (x1 + w, y1 + h), 255, -1)
+    if hasWatermark:
+        text = "SPORTS"
+        scale = max(0.35, width / 3600)
+        thickness = max(1, width // 1280)
+        size, _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, scale, thickness)
+        origin = (width - size[0] - int(width * 0.025), int(height * 0.055))
+        cv2.putText(
+            image,
+            text,
+            origin,
+            cv2.FONT_HERSHEY_SIMPLEX,
+            scale,
+            (228, 228, 228),
+            thickness,
+            cv2.LINE_AA,
+        )
+        x1 = origin[0] - 4
+        y1 = origin[1] - size[1] - 4
+        cv2.rectangle(mask, (x1, y1), (origin[0] + size[0] + 4, origin[1] + 4), 255, -1)
+    return {"scoreboard": hasScoreboard, "watermark": hasWatermark}
+
+
+def pointOccluded(mask: np.ndarray, x: float, y: float, radius: int) -> bool:
+    centerX = int(round(x))
+    centerY = int(round(y))
+    x1 = max(0, centerX - radius)
+    x2 = min(mask.shape[1], centerX + radius + 1)
+    y1 = max(0, centerY - radius)
+    y2 = min(mask.shape[0], centerY + radius + 1)
+    if x1 >= x2 or y1 >= y2:
+        return True
+    crop = mask[y1:y2, x1:x2]
+    return bool(mask[centerY, centerX] > 0 or np.mean(crop > 0) > 0.42)
+
+
+def matrixAsList(matrix: np.ndarray) -> list[list[float]]:
+    return [[float(value) for value in line] for line in np.asarray(matrix)]
+
+
+def createDebug(image: np.ndarray, labels: Sequence[ProjectedLabel]) -> np.ndarray:
+    debug = image.copy()
+    for label in labels:
+        x = int(round(label.x))
+        y = int(round(label.y))
+        color = (
+            int((37 * label.reference.classId + 80) % 255),
+            int((83 * label.reference.classId + 120) % 255),
+            int((149 * label.reference.classId + 160) % 255),
+        )
+        cv2.circle(debug, (x, y), 6, color, 2, cv2.LINE_AA)
+        cv2.putText(
+            debug,
+            f"{label.reference.classId}:{label.reference.className}",
+            (x + 8, y - 7),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.38,
+            (250, 250, 250),
+            2,
+            cv2.LINE_AA,
+        )
+        cv2.putText(
+            debug,
+            f"{label.reference.classId}:{label.reference.className}",
+            (x + 8, y - 7),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.38,
+            (15, 15, 15),
+            1,
+            cv2.LINE_AA,
+        )
+    return debug
