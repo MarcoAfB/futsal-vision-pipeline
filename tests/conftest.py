@@ -8,6 +8,16 @@ import pytest
 import yaml
 
 
+@pytest.fixture(scope="session")
+def syntheticSource(tmp_path_factory):
+    from futsal.datasets.syntheticCourt import generateSyntheticCourt
+
+    root = tmp_path_factory.mktemp("synthetic") / "source"
+    generateSyntheticCourt(root, count=1, seed=2026, width=640, height=360,
+                           textureScale=24, debugCount=1, progress=lambda message: None)
+    return root
+
+
 @pytest.fixture
 def smallDataset(tmp_path, monkeypatch):
     projectRoot = Path(__file__).resolve().parents[1]
