@@ -50,6 +50,22 @@ def testRunChainsBestWeightsAndRecordsReproducibleInputs(trainingBundle, localWe
         runTraining(bundle, configPath, localWeights, runDir)
 
 
+def testRegisteredLegacyBundleTrainsWithoutRuntimeImageCopies(trainingBundle, localWeights,
+                                                            fakeTraining, tmp_path):
+    from futsal.datasets.mediaRegistration import registerMedia
+
+    bundle, configPath, _ = trainingBundle
+    store = tmp_path / "store"
+    registerMedia(store, bundle)
+    runDir = tmp_path / "sharedLegacyRun"
+    result = runTraining(bundle, configPath, localWeights, runDir, mediaStoreDir=store,
+                         progress=lambda message: None)
+    assert result["status"] == "completed", result.get("error")
+    assert result["contractId"] == readJson(bundle / "contract.json")["contractId"]
+    assert result["runtimeIntegrityAfterRun"]
+    assert not list((runDir / "runtimeData").rglob("*.png"))
+
+
 @pytest.mark.parametrize("failure", [ValueError("failed stage"), KeyboardInterrupt()])
 def testRunPreservesFailedStageAndNeverStartsLaterStages(trainingBundle, localWeights,
                                                        fakeTraining, tmp_path, monkeypatch, failure):

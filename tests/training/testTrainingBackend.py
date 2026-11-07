@@ -33,12 +33,23 @@ def testLoaderRejectsSilentAnnotationDrops(trainingBundle, tmp_path):
 
 @pytest.mark.trainingIntegration
 @pytest.mark.parametrize("scientific", [False, True])
+@pytest.mark.parametrize("shared", [False, True])
 def testNativeCpuStagesProduceTwoThreeAndTwentyFiveClassCheckpoints(trainingBundle, tmp_path,
-                                                                  monkeypatch, scientific):
+                                                                  monkeypatch, scientific, shared, preparedSources):
     from futsal.training.modelWeights import prepareWeights
     from futsal.training.trainingRun import runTraining
 
     bundle, configFile, config = trainingBundle
+    options = {}
+    if shared:
+        from futsal.datasets.mediaRegistration import registerMedia
+        from futsal.datasets.sharedViews import prepareView
+
+        store, view = tmp_path / "mediaStore", tmp_path / "sharedView"
+        registerMedia(store, bundle)
+        prepareView(store, preparedSources[1], view)
+        bundle = view
+        options["mediaStoreDir"] = store
     if scientific:
         import yaml
 
@@ -83,7 +94,7 @@ def testNativeCpuStagesProduceTwoThreeAndTwentyFiveClassCheckpoints(trainingBund
 
     monkeypatch.setattr("futsal.training.modelWeights.downloadWeights", fixtureDownload)
     prepareWeights("n", tmp_path / "initial")
-    run = runTraining(bundle, configFile, tmp_path / "initial" / "yolo26n.pt", runDir)
+    run = runTraining(bundle, configFile, tmp_path / "initial" / "yolo26n.pt", runDir, **options)
     assert run["status"] == "completed", run.get("error")
     assert run["runtimeIntegrityAfterRun"]
     assert run["bundleIntegrityAfterRun"]["hashesVerified"]
@@ -108,7 +119,7 @@ def testNativeCpuStagesProduceTwoThreeAndTwentyFiveClassCheckpoints(trainingBund
 
     evaluationDir = tmp_path / "researchEvaluation"
     evaluation = evaluateRun(runDir, bundle, "configs/evaluation/researchValidation.yaml",
-                             "runValidation", evaluationDir)
+                             "runValidation", evaluationDir, **options)
     assert evaluation["status"] == "completed", evaluation.get("error")
     assert evaluation["runtimeAfter"] and evaluation["bundleAfter"]["hashesVerified"]
     for stage in evaluation["stages"]:
@@ -122,7 +133,9 @@ def testNativeCpuStagesProduceTwoThreeAndTwentyFiveClassCheckpoints(trainingBund
     assert unsupported["successRates"]["0.01"] is None
     assert networkCalls == []
     full = evaluateRun(runDir, bundle, "configs/evaluation/researchValidation.yaml",
-                       "fullValidation", tmp_path / "fullValidation")
+                       "fullValidation", tmp_path / "fullValidation", **options)
     assert full["status"] == "completed", full.get("error")
     assert full["selection"] == "fullValidation"
     assert all(stage["imageCount"] == 2 for stage in full["stages"])
+    if shared:
+        assert not list((runDir / "runtimeData").rglob("*.png"))

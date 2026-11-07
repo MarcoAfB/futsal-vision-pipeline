@@ -21,14 +21,26 @@ def testIndependentProfilesAreSingleStageAndShareDeclaredProtocol(projectionBund
 
 
 @pytest.mark.trainingIntegration
-def testNativeIndependentModelsStartFromSameOfficialInput(projectionBundle, tmp_path, monkeypatch):
+@pytest.mark.parametrize("shared", [False, True])
+def testNativeIndependentModelsStartFromSameOfficialInput(projectionBundle, tmp_path, monkeypatch, shared):
     from futsal.training.modelWeights import prepareWeights
     from futsal.training.trainingBackend import initializeBackend
     from futsal.training.trainingRun import runTraining
 
     parent, projectionDir, _, _ = projectionBundle
     bundle = tmp_path / "data"
-    materializeProjection(parent, projectionDir, bundle, progress=lambda message: None)
+    options = {}
+    if shared:
+        from futsal.datasets.mediaRegistration import registerMedia
+        from futsal.datasets.sharedViews import prepareView
+
+        store = tmp_path / "store"
+        registerMedia(store, parent)
+        registerMedia(store, projectionDir)
+        prepareView(store, projectionBundle[2], bundle)
+        options["mediaStoreDir"] = store
+    else:
+        materializeProjection(parent, projectionDir, bundle, progress=lambda message: None)
     initializeBackend(tmp_path / "setup", 2)
     import torch
     from ultralytics.nn.tasks import DetectionModel
@@ -51,7 +63,7 @@ def testNativeIndependentModelsStartFromSameOfficialInput(projectionBundle, tmp_
         configFile = tmp_path / f"{taskId}.yaml"
         configFile.write_text(yaml.safe_dump(config), encoding="utf-8")
         runDir = tmp_path / taskId
-        run = runTraining(bundle, configFile, weights, runDir, progress=lambda message: None)
+        run = runTraining(bundle, configFile, weights, runDir, progress=lambda message: None, **options)
         assert run["status"] == "completed", run.get("error")
         stage = run["stages"][0]
         assert stage["inputWeights"]["sha256"] == original
@@ -64,8 +76,11 @@ def testNativeIndependentModelsStartFromSameOfficialInput(projectionBundle, tmp_
 
     output = tmp_path / "joint"
     state = evaluateConfiguration(tmp_path / "detailedObjects", tmp_path / "courtPoints", bundle, parent,
-                                  "configs/evaluation/researchValidation.yaml", output, progress=lambda message: None)
+                                  "configs/evaluation/researchValidation.yaml", output, progress=lambda message: None, **options)
     assert state["status"] == "completed", state.get("error")
+    if shared:
+        assert not list((tmp_path / "detailedObjects/runtimeData").rglob("*.png"))
+        assert not list((Path(state["workDirectory"]) / "runtimeData").rglob("*.png"))
     assert len(state["recordIds"]) == 2
     detection = readJson(output / "evidence/joint/detection.json")
     assert detection["groups"]["all"]["ap50To95"] == pytest.approx(state["nativeValidationMetrics"]["metrics/mAP50-95(B)"], abs=1e-12)
