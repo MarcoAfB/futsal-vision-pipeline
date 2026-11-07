@@ -303,3 +303,120 @@ def lowFrequencyNoise(
     smallWidth = max(3, math.ceil(width / scale))
     small = rng.normal(0.0, 1.0, (smallHeight, smallWidth)).astype(np.float32)
     return cv2.resize(small, (width, height), interpolation=cv2.INTER_CUBIC)
+
+
+def createWoodFloor(plane: MetricPlane, rng: np.random.Generator) -> np.ndarray:
+    palettes = np.asarray(
+        [(43, 83, 131), (43, 98, 144), (108, 167, 190), (138, 208, 215), (155, 228, 246)],
+        dtype=np.float32,
+    )
+    base = palettes[int(rng.integers(0, len(palettes)))]
+    base += rng.normal(0.0, 7.0, 3)
+    image = np.empty((plane.heightPixels, plane.widthPixels, 3), np.float32)
+    image[:] = base
+    noise = lowFrequencyNoise(plane.heightPixels, plane.widthPixels, rng, scale=72)
+    image += noise[..., None] * rng.uniform(5.0, 13.0)
+    image = np.clip(image, 0, 255).astype(np.uint8)
+    boardHeightMeters = float(rng.uniform(0.13, 0.22))
+    boardHeightPixels = max(4, int(round(boardHeightMeters * plane.scale)))
+    jointColor = clampColor(base * rng.uniform(0.84, 0.94))
+    for y in range(0, plane.heightPixels, boardHeightPixels):
+        cv2.line(image, (0, y), (plane.widthPixels - 1, y), jointColor, 1)
+        offset = int(rng.integers(0, max(1, int(2.5 * plane.scale))))
+        boardLength = int(rng.uniform(1.6, 3.2) * plane.scale)
+        for x in range(offset, plane.widthPixels, boardLength):
+            cv2.line(
+                image,
+                (x, y),
+                (x, min(plane.heightPixels - 1, y + boardHeightPixels)),
+                jointColor,
+                1,
+            )
+    for _ in range(180):
+        y = int(rng.integers(0, plane.heightPixels))
+        x1 = int(rng.integers(0, plane.widthPixels))
+        x2 = min(plane.widthPixels - 1, x1 + int(rng.uniform(30, 240)))
+        color = clampColor(base * rng.uniform(0.76, 1.05))
+        cv2.line(image, (x1, y), (x2, y), color, 1, cv2.LINE_AA)
+    return image
+
+
+def createPaintedFloor(plane: MetricPlane, rng: np.random.Generator) -> np.ndarray:
+    palettes = np.asarray(
+        [(230, 196, 160), (176, 128, 96), (182, 94, 76), (213, 114, 90), (190, 118, 80)],
+        dtype=np.float32,
+    )
+    base = palettes[int(rng.integers(0, len(palettes)))]
+    base += rng.normal(0.0, 8.0, 3)
+    image = np.empty((plane.heightPixels, plane.widthPixels, 3), np.float32)
+    image[:] = base
+    smooth = lowFrequencyNoise(plane.heightPixels, plane.widthPixels, rng, scale=56)
+    thin = rng.normal(0.0, 1.3, image.shape[:2]).astype(np.float32)
+    image += (smooth * rng.uniform(4.0, 10.0) + thin)[..., None]
+    return np.clip(image, 0, 255).astype(np.uint8)
+
+
+def penaltyAreaPolygon(model: SynthesisModel, rightSide: bool, arcCount: int = 32) -> np.ndarray:
+    radius = model.penaltyDistance
+    centerY = model.width / 2
+    halfAreaSegment = (model.goalWidth + 0.16) / 2
+    upperY = centerY - halfAreaSegment
+    lowerY = centerY + halfAreaSegment
+    if not rightSide:
+        upperArc = [
+            (radius * math.cos(angle), upperY + radius * math.sin(angle))
+            for angle in np.linspace(-math.pi / 2, 0.0, arcCount)
+        ]
+        lowerArc = [
+            (radius * math.cos(angle), lowerY + radius * math.sin(angle))
+            for angle in np.linspace(0.0, math.pi / 2, arcCount)
+        ]
+        return np.asarray(
+            [(0.0, upperY - radius), *upperArc, *lowerArc, (0.0, lowerY + radius)], dtype=np.float64
+        )
+    return np.asarray(
+        [(model.length - x, y) for x, y in penaltyAreaPolygon(model, False, arcCount)[::-1]],
+        dtype=np.float64,
+    )
+
+
+def drawLogosAndDistractors(
+    image: np.ndarray, plane: MetricPlane, rng: np.random.Generator
+) -> None:
+    model = plane.model
+    for _ in range(int(rng.integers(1, 4))):
+        x = float(rng.choice([rng.uniform(8, 16), rng.uniform(17, 23), rng.uniform(24, 32)]))
+        y = float(rng.uniform(5.5, 14.5))
+        radiusX = float(rng.uniform(1.8, 4.2))
+        radiusY = float(rng.uniform(0.9, 2.6))
+        center = plane.point(x, y)
+        axes = (int(radiusX * plane.scale), int(radiusY * plane.scale))
+        color = clampColor(rng.integers(35, 225, 3))
+        overlay = image.copy()
+        cv2.ellipse(overlay, center, axes, 0, 0, 360, color, -1, cv2.LINE_AA)
+        alpha = float(rng.uniform(0.28, 0.52))
+        cv2.addWeighted(overlay, alpha, image, 1.0 - alpha, 0, image)
+        for offset in (-0.45, 0.0, 0.45):
+            p1 = plane.point(x - radiusX * 0.55, y + offset)
+            p2 = plane.point(x + radiusX * 0.55, y + offset)
+            cv2.line(image, p1, p2, (225, 225, 225), max(1, plane.scale // 24), cv2.LINE_AA)
+    colors = [(35, 185, 225), (50, 70, 205), (200, 90, 55), (70, 180, 85)]
+    for _ in range(int(rng.integers(2, 7))):
+        color = colors[int(rng.integers(0, len(colors)))]
+        thickness = max(1, int(round(rng.uniform(0.035, 0.06) * plane.scale)))
+        if rng.random() < 0.65:
+            y = float(rng.uniform(1.0, model.width - 1.0))
+            cv2.line(
+                image,
+                plane.point(0.0, y),
+                plane.point(model.length, y + rng.uniform(-1.0, 1.0)),
+                color,
+                thickness,
+                cv2.LINE_AA,
+            )
+        else:
+            x = float(rng.uniform(3.0, model.length - 3.0))
+            radius = int(rng.uniform(1.5, 4.5) * plane.scale)
+            cv2.circle(
+                image, plane.point(x, model.width / 2), radius, color, thickness, cv2.LINE_AA
+            )
