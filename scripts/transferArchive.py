@@ -13,12 +13,21 @@ toolVersion = 1
 reserveBytes = 2 * 1024 ** 3
 
 
+def filePath(path):
+    path = Path(os.path.abspath(path))
+    value = str(path)
+    if os.name == "nt" and not value.startswith("\\\\?\\"):
+        value = "\\\\?\\UNC\\" + value[2:] if value.startswith("\\\\") else "\\\\?\\" + value
+        return Path(value)
+    return path
+
+
 def readJson(path):
-    return json.loads(Path(path).read_text(encoding="utf-8"))
+    return json.loads(filePath(path).read_text(encoding="utf-8"))
 
 
 def writeJson(path, value):
-    with Path(path).open("x", encoding="utf-8", newline="\n") as output:
+    with filePath(path).open("x", encoding="utf-8", newline="\n") as output:
         json.dump(value, output, sort_keys=True, ensure_ascii=False, allow_nan=False, indent=2)
         output.write("\n")
 
@@ -29,7 +38,7 @@ def hashJson(value):
 
 
 def hashFile(path):
-    with Path(path).open("rb") as source:
+    with filePath(path).open("rb") as source:
         return hashlib.file_digest(source, "sha256").hexdigest()
 
 
@@ -69,7 +78,7 @@ def validateFiles(files):
 
 
 def regularFiles(root):
-    root = Path(root)
+    root = filePath(root)
     if root.is_symlink() or root.is_junction():
         raise ValueError("Input roots must not be links.")
     result = {}
@@ -145,7 +154,7 @@ def checkArchive(archive, receipt, outputDir=None, kind=None):
             digest = hashlib.sha256()
             target = None
             if outputDir is not None:
-                path = Path(outputDir) / member.name
+                path = filePath(Path(outputDir) / member.name)
                 path.parent.mkdir(parents=True, exist_ok=True)
                 target = path.open("xb")
             try:

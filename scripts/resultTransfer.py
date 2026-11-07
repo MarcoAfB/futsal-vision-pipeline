@@ -5,6 +5,7 @@ from pathlib import Path
 
 from transferArchive import (
     checkArchive,
+    filePath,
     hashFile,
     hashJson,
     packArchive,
@@ -17,7 +18,7 @@ from transferArchive import (
 
 def verifyFiles(root, evidence):
     for item in evidence:
-        path = Path(root) / str(safeRelative(item["path"]))
+        path = filePath(Path(root) / str(safeRelative(item["path"])))
         if path.is_symlink() or not path.is_file() or path.stat().st_size != item["byteSize"] or hashFile(path) != item["sha256"]:
             raise ValueError(f"Archived evidence changed: {item['path']}.")
 
@@ -100,6 +101,90 @@ def packResults(runDir, reportDirs, archive, receipt, compression="gzip", launch
                        protected=[runDir, *reportDirs, *([launchDir] if launchDir else [])])
 
 
+def verifyAttachedReport(root, configurationSeal, runHashes):
+    trainingHash = verifyReport(root)
+    if trainingHash is not None:
+        if trainingHash not in runHashes:
+            raise ValueError("Attached report belongs to another component run.")
+        return
+    evaluation = readJson(Path(root) / "evaluation.json")
+    if evaluation.get("kind") != "configurationComparison" or evaluation.get("candidateContractId") != configurationSeal:
+        raise ValueError("Attached comparison belongs to a different configuration evaluation.")
+    nested = Path(root) / "evidence/candidate"
+    verifyReport(nested)
+    if readJson(nested / "evaluationContract.json")["contractId"] != configurationSeal:
+        raise ValueError("Comparison candidate evidence differs from the joint evaluation.")
+    baseline = Path(root) / "evidence/baseline"
+    verifyReport(baseline)
+    if readJson(baseline / "evaluationContract.json")["contractId"] != evaluation["baselineContractId"]:
+        raise ValueError("Comparison baseline evidence differs from its recorded seal.")
+
+
+def configurationRuns(configurationDir):
+    root = Path(configurationDir)
+    verifyReport(root)
+    state = readJson(root / "evaluation.json")
+    if state.get("kind") != "configurationEvaluation" or state["status"] != "completed":
+        raise ValueError("Configuration results require a completed joint evaluation.")
+    if [item["taskId"] for item in state["components"]] != ["detailedObjects", "courtPoints"]:
+        raise ValueError("Configuration component partition differs from independent objects/court.")
+    return state
+
+
+def packConfigurationResults(configurationDir, reportDirs, archive, receipt, compression="gzip", launchDir=None):
+    root = Path(configurationDir).resolve()
+    state = configurationRuns(root)
+    included = {f"configuration/{name}": path for name, path in regularFiles(root).items()}
+    runs, protected = [], [root, *reportDirs]
+    for component in state["components"]:
+        directory = Path(component["runDirectory"]).resolve()
+        run = verifyRun(directory)
+        if run != component["run"] or hashFile(directory / "run.json") != component["runSha256"]:
+            raise ValueError("Component metadata differ from the joint evaluation.")
+        prefix = f"runs/{component['taskId']}"
+        for name in ("run.json", "summary.json", "selection.json", "runtimeEvidence.json", "failure.txt"):
+            if (directory / name).is_file():
+                included[f"{prefix}/{name}"] = directory / name
+        for folder in ("inputs", "code", "stages", "logs"):
+            included.update({f"{prefix}/{folder}/{name}": path for name, path in regularFiles(directory / folder).items()})
+        runs.append({"taskId": component["taskId"], "path": prefix, "runSha256": component["runSha256"]})
+        protected.append(directory)
+    configurationSeal = readJson(root / "evaluationContract.json")["contractId"]
+    reports = []
+    for index, directory in enumerate(map(Path, reportDirs), start=1):
+        verifyAttachedReport(directory, configurationSeal, {item["runSha256"] for item in runs})
+        prefix = f"reports/report{index:02d}"
+        included.update({f"{prefix}/{name}": path for name, path in regularFiles(directory).items()})
+        reports.append({"path": prefix, "originalName": directory.name})
+    if launchDir is not None:
+        included.update({f"launch/{name}": path for name, path in regularFiles(Path(launchDir)).items()})
+        protected.append(launchDir)
+    sources = {name: (path, {"path": name, "byteSize": path.stat().st_size, "sha256": hashFile(path)}) for name, path in included.items()}
+    metadata = {"configurationContractId": configurationSeal, "runs": runs, "reports": reports,
+        "excluded": ["runs/*/runtimeData", "runs/*/backend", "evaluationWork"],
+        "excludedRuntimeBytesVerifiedAtReceiver": False,
+        "toolSourceHashes": {name: hashFile(Path(__file__).with_name(name)) for name in ("resultTransfer.py", "transferArchive.py")}}
+    return packArchive(sources, archive, receipt, "configurationResultsTransfer", metadata, compression, protected)
+
+
+def validateConfigurationResults(root, receipt):
+    state = configurationRuns(root / "configuration")
+    seal = readJson(root / "configuration/evaluationContract.json")["contractId"]
+    if seal != receipt["metadata"]["configurationContractId"]:
+        raise ValueError("Extracted configuration identity mismatch.")
+    byTask = {item["taskId"]: item for item in state["components"]}
+    if {item["taskId"] for item in receipt["metadata"]["runs"]} != set(byTask):
+        raise ValueError("Extracted component membership mismatch.")
+    for item in receipt["metadata"]["runs"]:
+        directory = root / str(safeRelative(item["path"]))
+        run = verifyRun(directory)
+        if run != byTask[item["taskId"]]["run"] or hashFile(directory / "run.json") != item["runSha256"] or item["runSha256"] != byTask[item["taskId"]]["runSha256"]:
+            raise ValueError("Extracted component metadata changed.")
+    for report in receipt["metadata"]["reports"]:
+        verifyAttachedReport(root / str(safeRelative(report["path"])), seal,
+                             {item["runSha256"] for item in receipt["metadata"]["runs"]})
+
+
 def validateResults(root, receipt):
     run = verifyRun(root / "run")
     if hashFile(root / "run/run.json") != receipt["metadata"]["runSha256"] or run["status"] != receipt["metadata"]["runStatus"]:
@@ -118,7 +203,9 @@ def main(argv=None):
         command.add_argument("--archive", type=Path, required=True)
         command.add_argument("--receipt", type=Path, required=True)
         if name == "pack":
-            command.add_argument("--runDir", type=Path, required=True)
+            source = command.add_mutually_exclusive_group(required=True)
+            source.add_argument("--runDir", type=Path)
+            source.add_argument("--configurationDir", type=Path)
             command.add_argument("--reportDir", type=Path, action="append", default=[])
             command.add_argument("--launchDir", type=Path)
             command.add_argument("--compression", choices=["gzip", "none"], default="gzip")
@@ -127,14 +214,23 @@ def main(argv=None):
     arguments = parser.parse_args(argv)
     try:
         if arguments.command == "pack":
-            receipt = packResults(arguments.runDir, arguments.reportDir, arguments.archive, arguments.receipt,
-                                  arguments.compression, arguments.launchDir)
+            if arguments.configurationDir is not None:
+                receipt = packConfigurationResults(arguments.configurationDir, arguments.reportDir, arguments.archive,
+                                                  arguments.receipt, arguments.compression, arguments.launchDir)
+            else:
+                receipt = packResults(arguments.runDir, arguments.reportDir, arguments.archive, arguments.receipt,
+                                      arguments.compression, arguments.launchDir)
         elif arguments.command == "unpack":
+            kind = readJson(arguments.receipt)["kind"]
+            if kind not in {"curriculumResultsTransfer", "configurationResultsTransfer"}:
+                raise ValueError("Unsupported results transfer kind.")
             receipt = unpackArchive(arguments.archive, arguments.receipt, arguments.outputDir,
-                                    "curriculumResultsTransfer", validateResults)
+                                    kind, validateConfigurationResults if kind == "configurationResultsTransfer" else validateResults)
         else:
             receipt = readJson(arguments.receipt)
-            checkArchive(arguments.archive, receipt, kind="curriculumResultsTransfer")
+            if receipt["kind"] not in {"curriculumResultsTransfer", "configurationResultsTransfer"}:
+                raise ValueError("Unsupported results transfer kind.")
+            checkArchive(arguments.archive, receipt, kind=receipt["kind"])
         print(f"Verified {receipt['fileCount']} result files; archive SHA-256 {receipt['archiveSha256']}", flush=True)
         return 0
     except (OSError, ValueError, KeyError, TypeError, tarfile.TarError) as error:
