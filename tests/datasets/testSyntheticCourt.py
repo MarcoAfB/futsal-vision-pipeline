@@ -1,4 +1,6 @@
 import shutil
+import sys
+from pathlib import Path
 
 import cv2
 import numpy as np
@@ -12,6 +14,7 @@ from futsal.datasets.syntheticCourt import (
     readSyntheticManifest,
     verifySyntheticCourt,
 )
+from futsal.inventory.catalog import hashFile
 
 
 def testGeneratedSourcePreservesNativePointsAndExcludesDebug(syntheticSource):
@@ -71,3 +74,17 @@ def testNativePointAtImageEdgeClipsOnlyDerivedBox():
     assert points[0]["imagePixels"] == [0.0, 0.0]
     assert targets[0]["transformation"]["truncated"]
     assert len(renderYoloLabels(targets).split()) == 5
+
+
+def testSyntheticArchiveRoundTrip(syntheticSource, tmp_path):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
+    from syntheticTransfer import packSynthetic, validateSyntheticTransfer
+    from transferArchive import unpackArchive
+
+    archive, receipt = tmp_path / "source.tar.gz", tmp_path / "receipt.json"
+    before = hashFile(syntheticSource / "contract.json")
+    packed = packSynthetic(syntheticSource, archive, receipt)
+    received = tmp_path / "received"
+    unpackArchive(archive, receipt, received, "syntheticCourtTransfer", validateSyntheticTransfer)
+    assert verifySyntheticCourt(received)["contractId"] == packed["metadata"]["contractId"]
+    assert hashFile(syntheticSource / "contract.json") == before
