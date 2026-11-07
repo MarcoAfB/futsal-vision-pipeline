@@ -31,8 +31,9 @@ def loadComponent(runDir, taskId, datasetDir, classes):
     root = Path(runDir).resolve()
     run = readJson(root / "run.json")
     config = run["configuration"]
-    if run["status"] != "completed" or run["purpose"] != "scientificTraining" or config.get("sourcePolicy") != "realOnly":
-        raise ValueError("Joint evaluation requires completed real-only scientific runs.")
+    allowed = {"realOnly", "realWithSyntheticCourt"} if taskId == "courtPoints" else {"realOnly"}
+    if run["status"] != "completed" or run["purpose"] != "scientificTraining" or config.get("sourcePolicy") not in allowed:
+        raise ValueError("Joint evaluation requires completed scientific runs with an allowed source policy.")
     if len(config["stages"]) != 1 or config["stages"][0]["taskId"] != taskId or len(run["stages"]) != 1 or run["stages"][0]["taskId"] != taskId or run["stages"][0]["status"] != "completed":
         raise ValueError("Each component must be its own independent single-stage run.")
     if run.get("integrityErrors") or not run.get("runtimeIntegrityAfterRun") or not run.get("bundleIntegrityAfterRun", {}).get("hashesVerified"):
@@ -42,7 +43,12 @@ def loadComponent(runDir, taskId, datasetDir, classes):
     for evidence in (run["artifacts"], run["inputEvidence"], run["code"]["files"]):
         verifyEvidence(root, evidence)
     selection = readJson(root / "selection.json")
-    if selection != selectTrainingData(datasetDir, config):
+    from futsal.training.syntheticTraining import loadSyntheticSnapshot
+
+    snapshot = loadSyntheticSnapshot(root, config, classes)
+    if snapshot is not None and not run.get("syntheticIntegrityAfterRun"):
+        raise ValueError("Mixed component has no successful synthetic source integrity record.")
+    if selection != selectTrainingData(datasetDir, config, snapshot):
         raise ValueError("Component did not use its full declared training/validation cohort.")
     _, tasks = evaluationTasks(datasetDir, root, run, "runValidation")
     if tasks[taskId]["classes"] != classes:
@@ -123,6 +129,9 @@ def evaluateConfiguration(objectsRunDir, courtRunDir, datasetDir, referenceDatas
             target.mkdir(parents=True)
             for name in ("run.json", "selection.json"):
                 shutil.copyfile(Path(component["runDirectory"]) / name, target / name)
+            if component["run"].get("syntheticSource"):
+                for name in ("syntheticContract.json", "syntheticManifest.jsonl"):
+                    shutil.copyfile(Path(component["runDirectory"]) / "inputs" / name, target / name)
         progress("Checking reference/projected bundles before joint validation...")
         state["bundlesBefore"] = [verifyBundleUnchanged(root, contract, digest) for root, contract, digest in contracts]
         if state["requestedDevice"] != "cpu":

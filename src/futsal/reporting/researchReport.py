@@ -272,6 +272,10 @@ def reportMarkdown(root, state):
                   "Validation uses every eligible record per task. The common intersection is reserved for shared "
                   "examples; it does not reduce task metrics. runValidation and fullValidation select the same "
                   "cohorts for this full-data profile; automatic evaluation runs once.", ""]
+        if state["training"].get("syntheticSource"):
+            supplement = state["training"]["syntheticSource"]
+            lines += [f"Synthetic court training images: {supplement['imageCount']}; "
+                      f"source contract: `{supplement['contractId']}`. Validation remains entirely real.", ""]
         if state["training"].get("continuation"):
             parent = state["training"]["continuation"]
             lines += [f"Continuation reuses {parent['completedStageCount']} completed stages from run "
