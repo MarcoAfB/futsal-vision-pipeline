@@ -1,5 +1,9 @@
 # Independent object and court detectors
 
+For new runs over existing curriculum/projection media, prefer
+[shared task views](sharedData.md). Register both providers and prepare a lightweight
+view with this recipe; full projection materialization is unnecessary in that workflow.
+
 For optional synthetic supplementation of the same court detector, see
 [synthetic court training](syntheticCourt.md). Generation runs independently;
 the profiles and real-only workflow below remain the defaults.

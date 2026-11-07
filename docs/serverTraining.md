@@ -1,5 +1,10 @@
 # First scientific curriculum on a server
 
+For an existing server workspace and completed curriculum, use the incremental
+[shared data workflow](sharedData.md). It registers existing inputs without image
+copies and supports independent task training. The initial setup below is for
+first-time provisioning and the legacy self-contained bundle workflow.
+
 This workflow prepares one YOLO26n detector through genericObjects (2 classes),
 roleObjects (3), then unified25 (25). Only the final unified25 best checkpoint is
 the resulting detector. Stage scores describe different ontologies; they do not

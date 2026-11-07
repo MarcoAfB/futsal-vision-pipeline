@@ -129,6 +129,11 @@ proportions, geometry rules, commands and limitations. No GPU packages are neede
 
 ## Conventions
 
+Use [shared media and task views](docs/sharedData.md) to reuse existing curriculum
+and projection images across independent training variants without copying them
+into new datasets, runs or evaluation work directories. Existing prepared bundles
+remain supported; shared views use `--mediaStoreDir`.
+
 Code, configuration, documentation, and commit messages use English. Owned names use
 camelCase; classes use PascalCase. Tool-required filenames and external APIs retain
 their required spelling. Original data filenames and labels are preserved.
