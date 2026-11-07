@@ -1,23 +1,35 @@
 import hashlib
 import json
 import math
+import platform
 from collections import Counter
+from dataclasses import asdict
+from importlib.metadata import version
 from pathlib import Path
 
 import cv2
+import numpy as np
 
 from futsal.annotations.detectionGeometry import annotationBox, renderYoloLabels
-from futsal.datasets.courtRendering import LabeledReference, SynthesisModel
-from futsal.datasets.datasetFiles import hashJson, readJson, verifyEvidence
+from futsal.datasets.courtRendering import (
+    LabeledReference,
+    RenderConfig,
+    SynthesisModel,
+    generateSample,
+    sampleRng,
+)
+from futsal.datasets.datasetFiles import (
+    hashJson,
+    readJson,
+    stagedDirectory,
+    verifyEvidence,
+    writeJson,
+)
 from futsal.inventory.catalog import hashFile, readYaml, resolveSourcePath
 from futsal.inventory.yoloInventory import scanFiles
 
 projectRoot = Path(__file__).resolve().parents[3]
-
-
 defaultConfig = projectRoot / "configs/syntheticCourt.yaml"
-
-
 pointBoxes = {"widthFraction": 1 / 64, "heightFraction": 1 / 36}
 
 
@@ -190,6 +202,121 @@ def encodeJpeg(image, quality):
     if not success:
         raise ValueError("Cannot encode a synthetic image.")
     return data.tobytes()
+
+
+def generateSyntheticCourt(outputDir, configPath=defaultConfig, progress=print, **overrides):
+    config = loadSynthesisConfig(configPath, **overrides)
+    from futsal.evaluation.evaluationData import validateResearchOutput
+
+    output = validateResearchOutput(
+        outputDir,
+        [
+            projectRoot / "data/raw",
+            projectRoot / "data/prepared",
+            projectRoot / "data/projections",
+            projectRoot / "data/modelWeights",
+            projectRoot / ".git",
+        ],
+        [configPath],
+    )
+    model = synthesisModel(config)
+    renderConfig = RenderConfig(**{key: config[key] for key in asdict(RenderConfig())})
+    versions = {
+        "python": platform.python_version(),
+        "numpy": np.__version__,
+        "opencv": cv2.__version__,
+        "pyyaml": version("PyYAML"),
+    }
+    generator = {
+        "implementation": "nativeCourtRenderingV1",
+        "versions": versions,
+        "sourceHashes": {
+            name: hashFile(Path(__file__).with_name(name))
+            for name in ("courtRendering.py", "syntheticCourt.py")
+        },
+        "parameterProvenance": "portedRenderingDefaultsNoCurrentValidationOrTestCalibration",
+    }
+    generationId = hashJson(
+        {
+            "configuration": config,
+            "generator": generator,
+            "classes": list(model.classNames.values()),
+            "pointBoxes": pointBoxes,
+        }
+    )
+    counts = Counter()
+    cv2.setNumThreads(1)
+    with stagedDirectory(
+        output, projectRoot / "data/raw", [configPath, projectRoot / "src", projectRoot / "configs"]
+    ) as staging:
+        for directory in ("images/train", "labels/train", "debug"):
+            (staging / directory).mkdir(parents=True)
+        writeJson(staging / "configuration.json", config)
+        with (staging / "manifest.jsonl").open("w", encoding="utf-8", newline="\n") as manifest:
+            for index in range(config["count"]):
+                least = min(counts.get(r.classId, 0) for r in model.references)
+                candidates = [r for r in model.references if counts.get(r.classId, 0) == least]
+                rng, sampleSeed = sampleRng(config["seed"], index)
+                sample = generateSample(
+                    model,
+                    renderConfig,
+                    rng,
+                    sampleSeed,
+                    candidates[int(rng.integers(len(candidates)))],
+                )
+                stem = f"syntheticCourt{index:06d}"
+                imagePath, labelPath = f"images/train/{stem}.jpg", f"labels/train/{stem}.txt"
+                (staging / imagePath).write_bytes(encodeJpeg(sample.image, sample.jpegQuality))
+                points = sample.metadata["visiblePoints"]
+                targets = derivedTargets(points, [config["width"], config["height"]])
+                (staging / labelPath).write_text(
+                    renderYoloLabels(targets), encoding="utf-8", newline="\n"
+                )
+                row = {
+                    "recordId": f"syntheticCourt:{generationId}:{index:06d}",
+                    "taskId": "courtPoints",
+                    "origin": "synthetic",
+                    "sourceId": "syntheticCourt",
+                    "split": "training",
+                    "dimensions": [config["width"], config["height"]],
+                    "imagePath": imagePath,
+                    "labelPath": labelPath,
+                    "imageSha256": hashFile(staging / imagePath),
+                    "labelSha256": hashFile(staging / labelPath),
+                    "targets": targets,
+                    "metadata": sample.metadata,
+                }
+                manifest.write(
+                    json.dumps(row, ensure_ascii=False, sort_keys=True, allow_nan=False) + "\n"
+                )
+                counts.update(p["classId"] for p in points)
+                if index < config["debugCount"]:
+                    (staging / f"debug/{stem}.jpg").write_bytes(encodeJpeg(sample.debugImage, 94))
+                if index == 0 or (index + 1) % 25 == 0 or index + 1 == config["count"]:
+                    progress(f"Generated {index + 1}/{config['count']} court images.")
+        writeJson(
+            staging / "summary.json",
+            {
+                "imageCount": config["count"],
+                "trainingOnly": True,
+                "support": {name: counts[index] for index, name in model.classNames.items()},
+            },
+        )
+        contract = {
+            "schemaVersion": 1,
+            "kind": "syntheticCourtDataset",
+            "trainingOnly": True,
+            "generationId": generationId,
+            "configuration": config,
+            "generator": generator,
+            "classes": list(model.classNames.values()),
+            "pointBoxes": pointBoxes,
+            "artifactEvidence": evidenceFiles(staging),
+        }
+        contract["contractId"] = hashJson(contract)
+        writeJson(staging / "contract.json", contract)
+        verifySyntheticCourt(staging)
+    return contract
 
 
 def validateSyntheticSnapshot(contract, rows, classes):
