@@ -3,6 +3,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
+import cv2
 import numpy as np
 
 referenceWidth = 1920
@@ -180,3 +181,125 @@ def fullBoxInImage(x: float, y: float, width: int, height: int) -> bool:
     halfWidth = width * pointBoxWidth / 2
     halfHeight = height * pointBoxHeight / 2
     return halfWidth <= x <= width - halfWidth and halfHeight <= y <= height - halfHeight
+
+
+def sampleCamera(
+    model: SynthesisModel,
+    targetReference: LabeledReference,
+    rng: np.random.Generator,
+    width: int,
+    height: int,
+    maxAttempts: int,
+) -> tuple[VirtualCamera, np.ndarray]:
+    courtPoints = np.asarray(
+        [[*item.coordinate, 0.0] for item in model.references], dtype=np.float64
+    )
+    center = np.asarray([[model.length / 2, model.width / 2, 0.0]], dtype=np.float64)
+    neighbors = np.asarray(
+        [
+            [model.length / 2 + 1, model.width / 2, 0.0],
+            [model.length / 2, model.width / 2 + 1, 0.0],
+        ],
+        dtype=np.float64,
+    )
+    corners = np.asarray(
+        [
+            [0.0, 0.0, 0.0],
+            [model.length, 0.0, 0.0],
+            [model.length, model.width, 0.0],
+            [0.0, model.width, 0.0],
+        ],
+        dtype=np.float64,
+    )
+    for _ in range(maxAttempts):
+        targetX = float(
+            np.clip(rng.normal(targetReference.coordinate[0], 5.0), -7.0, model.length + 7.0)
+        )
+        position = np.asarray(
+            [
+                model.length / 2 + rng.normal(0.0, 1.2),
+                rng.uniform(model.width + 15.0, model.width + 30.0),
+                rng.uniform(10.0, 17.0),
+            ],
+            dtype=np.float64,
+        )
+        target = np.asarray(
+            [targetX, rng.uniform(9.0, 11.0), rng.uniform(-2.0, -0.5)], dtype=np.float64
+        )
+        camera = pinholeCamera(
+            position,
+            target,
+            float(rng.uniform(20.0, 40.0)),
+            float(np.clip(rng.normal(0.0, 1.5), -4.0, 4.0)),
+            width,
+            height,
+            rng,
+        )
+        projected, depths = project3d(courtPoints, camera)
+        if np.any(depths <= 0) or not np.isfinite(projected).all():
+            continue
+        visible = np.asarray(
+            [fullBoxInImage(x, y, width, height) for x, y in projected], dtype=bool
+        )
+        visibleCount = int(visible.sum())
+        if not 4 <= visibleCount <= 12:
+            continue
+        if not visible[targetReference.classId]:
+            continue
+        projectedCenter, _ = project3d(center, camera)
+        projectedNeighbors, _ = project3d(neighbors, camera)
+        scaleX = float(np.linalg.norm(projectedNeighbors[0] - projectedCenter[0]))
+        scaleY = float(np.linalg.norm(projectedNeighbors[1] - projectedCenter[0]))
+        normalizedCenter = projectedCenter[0] / np.asarray([width, height])
+        projectedCorners, _ = project3d(corners, camera)
+        projectedArea = abs(float(cv2.contourArea(projectedCorners.astype(np.float32))))
+        normalizedArea = projectedArea / (width * height)
+        if not 70.0 <= scaleX <= 155.0:
+            continue
+        if not 20.0 <= scaleY <= 60.0:
+            continue
+        if not -0.65 <= normalizedCenter[0] <= 1.65:
+            continue
+        if not 0.25 <= normalizedCenter[1] <= 0.95:
+            continue
+        if not 0.65 <= normalizedArea <= 5.5:
+            continue
+        return (camera, projected)
+    raise RuntimeError(
+        "Cannot sample a valid camera. Increase maxCameraAttempts or review the court geometry."
+    )
+
+
+class MetricPlane:
+    def __init__(self, model: SynthesisModel, scale: int) -> None:
+        self.model = model
+        self.scale = scale
+        self.xMin = -6.0
+        self.xMax = model.length + 6.0
+        self.yMin = -5.0
+        self.yMax = model.width + 5.0
+        self.widthPixels = int(round((self.xMax - self.xMin) * scale)) + 1
+        self.heightPixels = int(round((self.yMax - self.yMin) * scale)) + 1
+
+    def point(self, x: float, y: float) -> tuple[int, int]:
+        return (int(round((x - self.xMin) * self.scale)), int(round((y - self.yMin) * self.scale)))
+
+    @property
+    def worldToPixel(self) -> np.ndarray:
+        return np.asarray(
+            [
+                [self.scale, 0.0, -self.xMin * self.scale],
+                [0.0, self.scale, -self.yMin * self.scale],
+                [0.0, 0.0, 1.0],
+            ],
+            dtype=np.float64,
+        )
+
+
+def lowFrequencyNoise(
+    height: int, width: int, rng: np.random.Generator, scale: int = 48
+) -> np.ndarray:
+    smallHeight = max(3, math.ceil(height / scale))
+    smallWidth = max(3, math.ceil(width / scale))
+    small = rng.normal(0.0, 1.0, (smallHeight, smallWidth)).astype(np.float32)
+    return cv2.resize(small, (width, height), interpolation=cv2.INTER_CUBIC)
