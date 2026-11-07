@@ -7,14 +7,8 @@ import cv2
 import numpy as np
 
 referenceWidth = 1920
-
-
 referenceHeight = 1080
-
-
 pointBoxWidth = 1 / 64
-
-
 pointBoxHeight = 1 / 36
 
 
@@ -1137,3 +1131,121 @@ def createDebug(image: np.ndarray, labels: Sequence[ProjectedLabel]) -> np.ndarr
             cv2.LINE_AA,
         )
     return debug
+
+
+def generateSample(
+    model: SynthesisModel,
+    config: RenderConfig,
+    rng: np.random.Generator,
+    sampleSeed: int,
+    targetReference: LabeledReference,
+) -> SyntheticSample:
+    nativeWidth = referenceWidth
+    nativeHeight = referenceHeight
+    for attempt in range(1, config.maxSampleAttempts + 1):
+        camera, projectedPoints = sampleCamera(
+            model, targetReference, rng, nativeWidth, nativeHeight, config.maxCameraAttempts
+        )
+        texture, plane, floorFamily = createCourtPlane(model, config.textureScale, rng)
+        background = createArenaBackground(nativeWidth, nativeHeight, rng)
+        image = composePlane(background, texture, plane, camera, nativeWidth, nativeHeight)
+        drawBoards(image, camera, model, rng)
+        drawGoals(image, camera, model, rng)
+        occlusionMask, peopleCount = drawHumanOccluders(image, camera, model, rng)
+        image, occlusionMask = applyDistortion(image, occlusionMask, camera)
+        image, photometryParameters = applyPhotometryAndVideo(image, rng)
+        overlays = drawBroadcastOverlays(image, occlusionMask, rng)
+        scaleX = config.width / nativeWidth
+        scaleY = config.height / nativeHeight
+        if (config.width, config.height) != (nativeWidth, nativeHeight):
+            image = cv2.resize(image, (config.width, config.height), interpolation=cv2.INTER_AREA)
+            finalMask = cv2.resize(
+                occlusionMask, (config.width, config.height), interpolation=cv2.INTER_NEAREST
+            )
+        else:
+            finalMask = occlusionMask
+        labels: list[ProjectedLabel] = []
+        for reference, nativePoint in zip(model.references, projectedPoints, strict=True):
+            x = float(nativePoint[0] * scaleX)
+            y = float(nativePoint[1] * scaleY)
+            if not fullBoxInImage(x, y, config.width, config.height):
+                continue
+            occlusionRadius = max(
+                2, int(round(max(config.width * pointBoxWidth, config.height * pointBoxHeight) / 2))
+            )
+            if pointOccluded(finalMask, x, y, occlusionRadius):
+                continue
+            labels.append(ProjectedLabel(reference, x, y))
+        visibleIds = {label.reference.classId for label in labels}
+        if not 4 <= len(labels) <= 11:
+            continue
+        if targetReference.classId not in visibleIds:
+            continue
+        quality = int(rng.integers(config.minJpegQuality, config.maxJpegQuality + 1))
+        outputScale = np.asarray(
+            [[scaleX, 0.0, 0.0], [0.0, scaleY, 0.0], [0.0, 0.0, 1.0]], dtype=np.float64
+        )
+        outputHomography = outputScale @ camera.undistortedHomography
+        visibleWorldPoints = np.asarray(
+            [label.reference.coordinate for label in labels], np.float64
+        )
+        visibleImagePoints = np.asarray([[label.x, label.y] for label in labels], np.float64)
+        approximateHomography, _ = cv2.findHomography(
+            visibleWorldPoints, visibleImagePoints, method=0
+        )
+        metadata: dict[str, Any] = {
+            "sampleSeed": sampleSeed,
+            "attempt": attempt,
+            "dimensions": [config.width, config.height],
+            "floorFamily": floorFamily,
+            "camera": {
+                "positionMeters": [float(v) for v in camera.position],
+                "targetMeters": [float(v) for v in camera.target],
+                "horizontalFovDegrees": camera.horizontalFovDegrees,
+                "rollDegrees": camera.rollDegrees,
+                "nativeIntrinsicMatrix": matrixAsList(camera.intrinsicMatrix),
+                "worldToCameraRotation": matrixAsList(camera.rotation),
+                "worldToCameraTranslation": [float(v) for v in camera.translation],
+                "brownConradyDistortion": {
+                    "k1": camera.distortion[0],
+                    "k2": camera.distortion[1],
+                    "p1": camera.distortion[2],
+                    "p2": camera.distortion[3],
+                },
+            },
+            "undistortedCourtToImageHomography": matrixAsList(
+                outputHomography / outputHomography[2, 2]
+            ),
+            "approximateHomographyAfterDistortion": matrixAsList(
+                approximateHomography / approximateHomography[2, 2]
+            )
+            if approximateHomography is not None
+            else None,
+            "targetReference": targetReference.className,
+            "renderedPeopleCount": peopleCount,
+            "visiblePointCount": len(labels),
+            "visiblePoints": [
+                {
+                    "classId": item.reference.classId,
+                    "className": item.reference.className,
+                    "reference": item.reference.referenceName,
+                    "courtMeters": [float(v) for v in item.reference.coordinate],
+                    "imagePixels": [item.x, item.y],
+                }
+                for item in labels
+            ],
+            "photometry": photometryParameters,
+            "overlays": overlays,
+            "jpegQuality": quality,
+        }
+        debug = createDebug(image, labels)
+        return SyntheticSample(
+            image=image,
+            debugImage=debug,
+            labels=tuple(labels),
+            metadata=metadata,
+            jpegQuality=quality,
+        )
+    raise RuntimeError(
+        f"Cannot generate a valid sample for {targetReference.className!r} after {config.maxSampleAttempts} attempts."
+    )
