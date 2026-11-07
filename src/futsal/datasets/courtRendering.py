@@ -720,3 +720,152 @@ def drawBoards(
                 cv2.polylines(overlay, [polygon], True, (215, 215, 210), 2, cv2.LINE_AA)
             y = y2
     cv2.addWeighted(overlay, 0.92, image, 0.08, 0, image)
+
+
+def drawGoals(
+    image: np.ndarray, camera: VirtualCamera, model: SynthesisModel, rng: np.random.Generator
+) -> None:
+    centerY = model.width / 2
+    y1 = centerY - model.goalWidth / 2
+    y2 = centerY + model.goalWidth / 2
+    stripColor = tuple(
+        int(v) for v in rng.choice(np.asarray([(35, 35, 185), (185, 55, 35), (45, 90, 190)]))
+    )
+    for frontX, direction in ((0.0, -1.0), (model.length, 1.0)):
+        backX = frontX + direction * 1.0
+        netOverlay = image.copy()
+        netLines: list[tuple[Sequence[float], Sequence[float]]] = []
+        for y in np.linspace(y1, y2, 7):
+            netLines.append(((frontX, y, 0.0), (backX, y, 0.0)))
+            netLines.append(((backX, y, 0.0), (backX, y, 2.0)))
+        for z in np.linspace(0.0, 2.0, 6):
+            netLines.append(((backX, y1, z), (backX, y2, z)))
+            netLines.append(((frontX, y1, z), (backX, y1, z)))
+            netLines.append(((frontX, y2, z), (backX, y2, z)))
+        for start, end in netLines:
+            segment = projectSegment(start, end, camera)
+            if segment is not None:
+                cv2.line(netOverlay, *segment, (195, 195, 190), 1, cv2.LINE_AA)
+        cv2.addWeighted(netOverlay, 0.48, image, 0.52, 0, image)
+        structure = [
+            ((frontX, y1, 0.0), (frontX, y1, 2.0)),
+            ((frontX, y2, 0.0), (frontX, y2, 2.0)),
+            ((frontX, y1, 2.0), (frontX, y2, 2.0)),
+        ]
+        for start, end in structure:
+            segment = projectSegment(start, end, camera)
+            if segment is None:
+                continue
+            p1, p2 = segment
+            reference, _ = project3d(
+                np.asarray([start, (start[0], start[1] + 0.08, start[2])]), camera, False
+            )
+            thickness = int(np.clip(np.linalg.norm(reference[1] - reference[0]), 3, 10))
+            cv2.line(image, p1, p2, (238, 238, 234), thickness, cv2.LINE_AA)
+            for fraction in (0.18, 0.48, 0.78):
+                a = tuple(
+                    np.rint(np.asarray(p1) * (1 - fraction) + np.asarray(p2) * fraction).astype(int)
+                )
+                bFraction = min(1.0, fraction + 0.1)
+                b = tuple(
+                    np.rint(np.asarray(p1) * (1 - bFraction) + np.asarray(p2) * bFraction).astype(
+                        int
+                    )
+                )
+                cv2.line(image, a, b, stripColor, thickness, cv2.LINE_AA)
+
+
+def uniformColors(rng: np.random.Generator) -> tuple[tuple[int, int, int], ...]:
+    pairs = (
+        ((25, 205, 235), (45, 45, 45)),
+        ((45, 55, 205), (225, 225, 220)),
+        ((220, 105, 45), (35, 35, 35)),
+        ((60, 165, 65), (225, 220, 210)),
+        ((35, 130, 225), (150, 55, 45)),
+    )
+    teamA, teamB = pairs[int(rng.integers(0, len(pairs)))]
+    goalkeeperA = tuple(
+        int(v) for v in rng.choice(np.asarray([(40, 190, 210), (200, 70, 170), (55, 180, 75)]))
+    )
+    goalkeeperB = tuple(
+        int(v) for v in rng.choice(np.asarray([(185, 85, 45), (55, 200, 200), (160, 55, 180)]))
+    )
+    return (teamA, teamB, goalkeeperA, goalkeeperB)
+
+
+def drawPerson(
+    image: np.ndarray,
+    occlusionMask: np.ndarray,
+    base: np.ndarray,
+    top: np.ndarray,
+    shirtColor: tuple[int, int, int],
+    rng: np.random.Generator,
+) -> None:
+    axis = top - base
+    height = float(np.linalg.norm(axis))
+    if height < 18:
+        return
+    unidade = axis / height
+    perpendicular = np.asarray([-unidade[1], unidade[0]])
+
+    def point(fraction: float, lateral: float = 0.0) -> tuple[int, int]:
+        value = base + axis * fraction + perpendicular * lateral * height
+        return tuple(np.rint(value).astype(int))
+
+    skin = tuple(
+        int(v)
+        for v in rng.choice(
+            np.asarray([(80, 135, 180), (60, 100, 145), (105, 165, 205), (45, 75, 110)])
+        )
+    )
+    shortsColor = clampColor(np.asarray(shirtColor) * rng.uniform(0.28, 0.58))
+    shadowColor = clampColor(np.asarray(shirtColor) * rng.uniform(0.7, 0.9))
+    stepSide = -1.0 if rng.random() < 0.5 else 1.0
+    shadowCenter = point(0.02, 0.08 * stepSide)
+    shadow = image.copy()
+    cv2.ellipse(
+        shadow,
+        shadowCenter,
+        (max(5, int(height * 0.16)), max(2, int(height * 0.035))),
+        float(rng.uniform(-20, 20)),
+        0,
+        360,
+        (18, 20, 22),
+        -1,
+        cv2.LINE_AA,
+    )
+    cv2.addWeighted(shadow, 0.28, image, 0.72, 0, image)
+    legThickness = max(2, int(round(height * 0.055)))
+    armThickness = max(2, int(round(height * 0.045)))
+    leftHip = point(0.43, -0.075)
+    rightHip = point(0.43, 0.075)
+    leftFoot = point(0.0, -0.07 + 0.055 * stepSide)
+    rightFoot = point(0.0, 0.07 + 0.08 * stepSide)
+    cv2.line(image, leftHip, leftFoot, skin, legThickness, cv2.LINE_AA)
+    cv2.line(image, rightHip, rightFoot, skin, legThickness, cv2.LINE_AA)
+    cv2.line(occlusionMask, leftHip, leftFoot, 255, legThickness + 2, cv2.LINE_AA)
+    cv2.line(occlusionMask, rightHip, rightFoot, 255, legThickness + 2, cv2.LINE_AA)
+    short = np.asarray(
+        [point(0.46, -0.105), point(0.46, 0.105), point(0.33, 0.075), point(0.33, -0.075)], np.int32
+    )
+    torso = np.asarray(
+        [point(0.78, -0.145), point(0.78, 0.145), point(0.45, 0.105), point(0.45, -0.105)], np.int32
+    )
+    cv2.fillConvexPoly(image, short, shortsColor, cv2.LINE_AA)
+    cv2.fillConvexPoly(image, torso, shirtColor, cv2.LINE_AA)
+    cv2.polylines(image, [torso], True, shadowColor, max(1, armThickness // 2), cv2.LINE_AA)
+    cv2.fillConvexPoly(occlusionMask, short, 255, cv2.LINE_AA)
+    cv2.fillConvexPoly(occlusionMask, torso, 255, cv2.LINE_AA)
+    leftShoulder = point(0.73, -0.13)
+    rightShoulder = point(0.73, 0.13)
+    leftHand = point(0.48, -0.2 - 0.04 * stepSide)
+    rightHand = point(0.5, 0.19 - 0.04 * stepSide)
+    cv2.line(image, leftShoulder, leftHand, skin, armThickness, cv2.LINE_AA)
+    cv2.line(image, rightShoulder, rightHand, skin, armThickness, cv2.LINE_AA)
+    cv2.line(occlusionMask, leftShoulder, leftHand, 255, armThickness + 2, cv2.LINE_AA)
+    cv2.line(occlusionMask, rightShoulder, rightHand, 255, armThickness + 2, cv2.LINE_AA)
+    headCenter = point(0.89)
+    headRadius = max(3, int(round(height * 0.068)))
+    cv2.circle(image, headCenter, headRadius, skin, -1, cv2.LINE_AA)
+    cv2.circle(image, point(0.94), max(2, int(headRadius * 0.75)), (35, 40, 45), -1, cv2.LINE_AA)
+    cv2.circle(occlusionMask, headCenter, headRadius + 1, 255, -1, cv2.LINE_AA)
