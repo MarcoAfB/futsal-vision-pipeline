@@ -88,3 +88,10 @@ The unchanged dataset contract is
 Local files are `data/transfers/curriculumV1.tar.gz` and
 `data/transfers/curriculumV1.receipt.json`, excluded from Git. A full extraction
 on the target remains required; no second full local dataset copy was created.
+
+For the independent object/court configuration, use the smaller incremental
+projection package and the extended resultTransfer --configurationDir mode.
+See [independent detection](separatedDetection.md) for parent-bound preparation,
+target materialization, both training commands and closed two-model result imports.
+Existing dataset and single-run receipts remain readable. Windows extraction
+handles deeply nested evidence paths without changing portable member names.

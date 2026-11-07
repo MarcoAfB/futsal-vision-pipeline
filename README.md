@@ -35,6 +35,11 @@ verified data and return checkpoints/sealed reports without runtime image copies
 Scripts and technical profiles are versioned; datasets, archives and machine
 settings are ignored. Server execution is distinct from local software checks.
 
+The [independent object/court workflow](docs/separatedDetection.md) adds two direct
+official-weight YOLO26n trainings with 5 and 20 classes, incremental data projections,
+joint canonical validation and sealed single-seed quality comparison against the
+completed curriculum. It preserves task-specific quarantine and reserved test data.
+
 ## Technical training smoke
 
 Install `uv sync --locked --extra training --extra reporting`, inspect the local CPU environment,

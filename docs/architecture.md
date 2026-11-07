@@ -54,6 +54,13 @@ library, allowing verification/extraction before the model environment exists.
 and records launch evidence. These tools are not imported by the package or
 included in its wheel; server execution requires a real Git checkout.
 
+Independent detection adds dataset-owned projection planning/materialization,
+evaluation-owned canonical two-model matching and sealed quality comparisons,
+and reporting-owned joint/paired presentations. `projectionTransfer` transports
+only the incremental data supplement; resultTransfer can close both component
+runs and their joint/comparison seals. Package/backend imports remain deferred so
+comparison and presentation regeneration do not require model packages.
+
 The former flat internal imports, such as `futsal.trainingRun`, are replaced by
 their domain paths. There are no forwarding modules or broad initializer exports.
 The restructuring preserved CLI names, arguments, configuration, data formats and
