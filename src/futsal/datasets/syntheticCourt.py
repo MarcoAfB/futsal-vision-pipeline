@@ -1,8 +1,12 @@
 import math
 from pathlib import Path
 
+import cv2
+
+from futsal.annotations.detectionGeometry import annotationBox
 from futsal.datasets.courtRendering import LabeledReference, SynthesisModel
-from futsal.inventory.catalog import readYaml
+from futsal.inventory.catalog import hashFile, readYaml
+from futsal.inventory.yoloInventory import scanFiles
 
 projectRoot = Path(__file__).resolve().parents[3]
 
@@ -16,6 +20,45 @@ pointBoxes = {"widthFraction": 1 / 64, "heightFraction": 1 / 36}
 def courtClassNames():
     labels, _ = readYaml(projectRoot / "configs/labelMap.yaml")
     return [item["name"] for item in labels["canonicalClasses"]][5:]
+
+
+def loadSynthesisConfig(configPath=defaultConfig, **overrides):
+    config, _ = readYaml(Path(configPath))
+    config.update({key: value for key, value in overrides.items() if value is not None})
+    fields = {
+        "schemaVersion",
+        "count",
+        "seed",
+        "width",
+        "height",
+        "textureScale",
+        "debugCount",
+        "minJpegQuality",
+        "maxJpegQuality",
+        "maxCameraAttempts",
+        "maxSampleAttempts",
+        "geometry",
+    }
+    if set(config) != fields or config["schemaVersion"] != 1:
+        raise ValueError("Unsupported synthesis configuration fields or schema.")
+    for key in fields - {"schemaVersion", "geometry"}:
+        if type(config[key]) is not int or config[key] < (
+            0 if key in {"seed", "debugCount"} else 1
+        ):
+            raise ValueError(f"Invalid synthesis integer: {key}.")
+    if (
+        config["width"] < 320
+        or config["height"] < 180
+        or not math.isclose(config["width"] / config["height"], 16 / 9, abs_tol=0.02)
+    ):
+        raise ValueError("Synthesis requires a 16:9 image of at least 320 x 180 pixels.")
+    if (
+        not 24 <= config["textureScale"] <= 128
+        or not 50 <= config["minJpegQuality"] <= config["maxJpegQuality"] <= 100
+    ):
+        raise ValueError("Invalid synthesis texture scale or JPEG quality interval.")
+    synthesisModel(config)
+    return config
 
 
 def synthesisModel(config):
@@ -106,3 +149,40 @@ def synthesisModel(config):
         references=tuple(references),
         classNames=dict(enumerate(names)),
     )
+
+
+def derivedTargets(points, dimensions):
+    targets = []
+    for index, point in enumerate(points):
+        coordinates, transformation = annotationBox(
+            {"shapeType": "points", "coordinates": point["imagePixels"]},
+            {"coordinateSystem": "pixelPoints", "dimensions": dimensions},
+            pointBoxes,
+        )
+        targets.append(
+            {
+                "classId": point["classId"],
+                "annotationIndex": index,
+                "coordinates": coordinates,
+                "transformation": transformation,
+            }
+        )
+    return targets
+
+
+def evidenceFiles(root):
+    return [
+        {
+            "path": p.relative_to(root).as_posix(),
+            "byteSize": p.stat().st_size,
+            "sha256": hashFile(p),
+        }
+        for p in scanFiles(root)
+    ]
+
+
+def encodeJpeg(image, quality):
+    success, data = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, quality])
+    if not success:
+        raise ValueError("Cannot encode a synthetic image.")
+    return data.tobytes()
