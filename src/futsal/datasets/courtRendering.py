@@ -571,3 +571,152 @@ def applyFloorReflections(image: np.ndarray, rng: np.random.Generator) -> np.nda
     mapImage = cv2.resize(mapImage, (width, height), interpolation=cv2.INTER_CUBIC)
     resultado = image.astype(np.float32) * mapImage[..., None]
     return np.clip(resultado, 0, 255).astype(np.uint8)
+
+
+def createCourtPlane(
+    model: SynthesisModel, scale: int, rng: np.random.Generator
+) -> tuple[np.ndarray, MetricPlane, str]:
+    plane = MetricPlane(model, scale)
+    family = "wood" if rng.random() < 0.48 else "painted"
+    if family == "wood":
+        image = createWoodFloor(plane, rng)
+    else:
+        image = createPaintedFloor(plane, rng)
+    courtMask = np.zeros(image.shape[:2], np.uint8)
+    cv2.rectangle(courtMask, plane.point(0.0, 0.0), plane.point(model.length, model.width), 255, -1)
+    surroundColor = np.asarray(
+        rng.choice(
+            np.asarray([(45, 55, 70), (70, 55, 48), (95, 55, 45), (38, 75, 105)], dtype=np.float32)
+        ),
+        dtype=np.float32,
+    )
+    outside = courtMask == 0
+    image[outside] = np.clip(
+        image[outside].astype(np.float32) * rng.uniform(0.25, 0.55)
+        + surroundColor * rng.uniform(0.45, 0.75),
+        0,
+        255,
+    ).astype(np.uint8)
+    if rng.random() < 0.48:
+        areaColor = clampColor(
+            rng.choice(np.asarray([(45, 70, 175), (185, 90, 65), (75, 120, 190), (55, 145, 110)]))
+        )
+        overlay = image.copy()
+        for right in (False, True):
+            polygon = penaltyAreaPolygon(model, right)
+            pixels = np.asarray([plane.point(x, y) for x, y in polygon], np.int32)
+            cv2.fillPoly(overlay, [pixels], areaColor, cv2.LINE_AA)
+        alpha = float(rng.uniform(0.45, 0.82))
+        cv2.addWeighted(overlay, alpha, image, 1.0 - alpha, 0, image)
+    drawLogosAndDistractors(image, plane, rng)
+    drawOfficialMarkings(image, plane, rng)
+    image = applyFloorReflections(image, rng)
+    return (image, plane, family)
+
+
+def createArenaBackground(width: int, height: int, rng: np.random.Generator) -> np.ndarray:
+    base = np.asarray(
+        rng.choice(np.asarray([(22, 24, 28), (35, 31, 28), (25, 32, 40), (45, 42, 37)])),
+        dtype=np.float32,
+    )
+    y = np.linspace(0.72, 1.18, height, dtype=np.float32)[:, None, None]
+    background = np.broadcast_to(base[None, None, :] * y, (height, width, 3)).copy()
+    smallW = max(80, width // 8)
+    smallH = max(45, height // 8)
+    audience = np.zeros((smallH, smallW, 3), np.uint8)
+    audience[:] = clampColor(base * 0.7)
+    colors = np.asarray(
+        [(35, 45, 60), (65, 75, 95), (40, 65, 125), (85, 55, 45), (110, 105, 85)], dtype=np.uint8
+    )
+    for _ in range(int(smallW * smallH * 0.035)):
+        cx = int(rng.integers(0, smallW))
+        cy = int(rng.integers(0, max(1, int(smallH * 0.68))))
+        color = tuple(int(v) for v in colors[int(rng.integers(0, len(colors)))])
+        cv2.circle(audience, (cx, cy), int(rng.integers(1, 3)), color, -1)
+    audience = cv2.GaussianBlur(audience, (5, 5), 0)
+    audience = cv2.resize(audience, (width, height), interpolation=cv2.INTER_LINEAR)
+    verticalMask = np.linspace(1.0, 0.0, height, dtype=np.float32)[:, None, None]
+    background = background * (1.0 - 0.55 * verticalMask) + audience * (0.55 * verticalMask)
+    return np.clip(background, 0, 255).astype(np.uint8)
+
+
+def composePlane(
+    background: np.ndarray,
+    texture: np.ndarray,
+    plane: MetricPlane,
+    camera: VirtualCamera,
+    width: int,
+    height: int,
+) -> np.ndarray:
+    planeToWorld = np.linalg.inv(plane.worldToPixel)
+    planeToImage = camera.undistortedHomography @ planeToWorld
+    projected = cv2.warpPerspective(
+        texture,
+        planeToImage,
+        (width, height),
+        flags=cv2.INTER_LANCZOS4,
+        borderMode=cv2.BORDER_REPLICATE,
+    )
+    horizonLine = np.linalg.inv(camera.undistortedHomography).T @ np.asarray([0.0, 0.0, 1.0])
+    center, _ = project3d(
+        np.asarray([[plane.model.length / 2, plane.model.width / 2, 0.0]]), camera, False
+    )
+    centerSign = float(horizonLine @ np.asarray([center[0, 0], center[0, 1], 1.0]))
+    sign = 1.0 if centerSign >= 0 else -1.0
+    yy, xx = np.mgrid[0:height, 0:width]
+    values = horizonLine[0] * xx + horizonLine[1] * yy + horizonLine[2]
+    mask = values * sign >= 0
+    resultado = background.copy()
+    resultado[mask] = projected[mask]
+    return resultado
+
+
+def projectSegment(
+    start: Sequence[float], end: Sequence[float], camera: VirtualCamera
+) -> tuple[tuple[int, int], tuple[int, int]] | None:
+    points, depths = project3d(np.asarray([start, end]), camera, False)
+    if np.any(depths <= 0) or not np.isfinite(points).all():
+        return None
+    return (tuple(np.rint(points[0]).astype(int)), tuple(np.rint(points[1]).astype(int)))
+
+
+def drawBoards(
+    image: np.ndarray, camera: VirtualCamera, model: SynthesisModel, rng: np.random.Generator
+) -> None:
+    overlay = image.copy()
+    panelWidth = float(rng.uniform(3.0, 5.5))
+    x = -5.0
+    colors = [(225, 225, 220), (45, 120, 185), (35, 55, 125), (185, 65, 45), (55, 150, 90)]
+    while x < model.length + 5.0:
+        x2 = min(model.length + 5.0, x + panelWidth)
+        vertices = np.asarray(
+            [[x, -0.35, 0.0], [x2, -0.35, 0.0], [x2, -0.35, 1.05], [x, -0.35, 1.05]],
+            dtype=np.float64,
+        )
+        pixels, depths = project3d(vertices, camera, False)
+        if np.all(depths > 0) and np.isfinite(pixels).all():
+            polygon = np.rint(pixels).astype(np.int32)
+            color = colors[int(rng.integers(0, len(colors)))]
+            cv2.fillConvexPoly(overlay, polygon, color, cv2.LINE_AA)
+            cv2.polylines(overlay, [polygon], True, (215, 215, 210), 2, cv2.LINE_AA)
+            middle1 = tuple(np.rint(pixels[0] * 0.65 + pixels[3] * 0.35).astype(int))
+            middle2 = tuple(np.rint(pixels[1] * 0.65 + pixels[2] * 0.35).astype(int))
+            cv2.line(overlay, middle1, middle2, (235, 235, 230), 3, cv2.LINE_AA)
+        x = x2
+        panelWidth = float(rng.uniform(3.0, 5.5))
+    for fixedX in (-0.35, model.length + 0.35):
+        y = -0.5
+        while y < model.width + 0.5:
+            y2 = min(model.width + 0.5, y + float(rng.uniform(2.6, 4.5)))
+            vertices = np.asarray(
+                [[fixedX, y, 0.0], [fixedX, y2, 0.0], [fixedX, y2, 1.05], [fixedX, y, 1.05]],
+                dtype=np.float64,
+            )
+            pixels, depths = project3d(vertices, camera, False)
+            if np.all(depths > 0) and np.isfinite(pixels).all():
+                polygon = np.rint(pixels).astype(np.int32)
+                color = colors[int(rng.integers(0, len(colors)))]
+                cv2.fillConvexPoly(overlay, polygon, color, cv2.LINE_AA)
+                cv2.polylines(overlay, [polygon], True, (215, 215, 210), 2, cv2.LINE_AA)
+            y = y2
+    cv2.addWeighted(overlay, 0.92, image, 0.08, 0, image)
