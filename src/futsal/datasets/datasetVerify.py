@@ -95,10 +95,14 @@ def verifyReviews(manifest, plan, samples):
     return paths
 
 
-def verifyDataset(datasetDir, progress=print):
+def verifyDataset(datasetDir, progress=print, *, mediaStoreDir=None):
     root = Path(datasetDir).resolve()
     try:
         contract = readJson(root / "contract.json")
+        if contract.get("kind") == "sharedTaskView":
+            from futsal.datasets.sharedViews import verifyView
+
+            return verifyView(root, mediaStoreDir)
         if contract["schemaVersion"] != 1 or contract["kind"] != "preparedCurriculumDataset":
             raise ValueError("Unsupported prepared dataset contract.")
         if contract["contractId"] != hashJson({key: value for key, value in contract.items()
