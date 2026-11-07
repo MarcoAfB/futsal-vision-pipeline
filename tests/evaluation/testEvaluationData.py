@@ -16,7 +16,7 @@ from futsal.inventory.catalog import hashFile
 from futsal.training.trainingData import selectTrainingData
 
 
-@pytest.mark.parametrize("directory", ["src", "configs", "../Python"])
+@pytest.mark.parametrize("directory", ["src", "configs", "data/raw"])
 def testResearchOutputProtectionUsesTheProjectRoot(tmp_path, directory):
     projectRoot = Path(futsal.__file__).resolve().parents[2]
     with pytest.raises(ValueError, match="outside dataRoot"):

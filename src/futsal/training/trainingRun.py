@@ -101,7 +101,7 @@ def runTraining(datasetDir, configPath, weightsPath, outputDir, progress=print, 
     protected = [configPath, weightsPath, projectRoot / "src", projectRoot / "configs",
                  projectRoot / "pyproject.toml", projectRoot / "uv.lock"]
     runDir = validateNewOutput(outputDir, datasetDir, protected)
-    validateNewOutput(runDir, projectRoot.parent / "Python")
+    validateNewOutput(runDir, projectRoot / "data" / "raw")
     if continueFrom is not None:
         validateNewOutput(runDir, continueFrom, [continueFrom])
     config = loadTrainingConfig(configPath, readJson(datasetDir / "plan.json")["recipe"])

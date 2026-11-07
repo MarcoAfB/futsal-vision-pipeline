@@ -31,6 +31,9 @@ def validateNewOutput(outputDir, sourceRoot, protectedPaths=()):
     if Path(outputDir).is_symlink():
         raise ValueError("outputDir must not be a symbolic link.")
     outputDir, sourceRoot = Path(outputDir).resolve(), Path(sourceRoot).resolve()
+    rawRoot = Path(__file__).resolve().parents[3] / "data" / "raw"
+    if outputDir.is_relative_to(rawRoot) and (outputDir != rawRoot or rawRoot.exists()):
+        raise ValueError("outputDir must be outside dataRoot to protect local raw sources.")
     if outputDir.is_relative_to(sourceRoot):
         raise ValueError("outputDir must be outside dataRoot.")
     if outputDir.exists():
@@ -71,7 +74,8 @@ def sourceEvidence(inventory, samples, dataRoot):
         expected[video["videoPath"]] = {"byteSize": video["media"]["byteSize"]}
         expected[video["annotationPath"]] = video["annotationEvidence"]
     registry = inventory["reviewRegistryEvidence"]
-    expected[registry["path"]] = registry
+    if registry.get("scope") != "configuration":
+        expected[registry["path"]] = registry
     usedPublic = {sample["sourceId"] for sample in samples if sample["origin"] == "public"}
     for report in inventory["externalSources"]:
         if report["sourceId"] not in usedPublic:
@@ -79,7 +83,7 @@ def sourceEvidence(inventory, samples, dataRoot):
         for item in report["annotationFiles"] + report["metadataFiles"]:
             if item.get("sha256"):
                 expected[item["path"]] = item
-        if report["labelMapEvidence"]:
+        if report["labelMapEvidence"] and report["labelMapEvidence"].get("scope") != "configuration":
             item = report["labelMapEvidence"]
             expected[item["path"]] = item
         for sample in report["samples"]:

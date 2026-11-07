@@ -10,7 +10,7 @@ from futsal.inventory.catalog import hashFile, readYaml
 
 def validateResearchOutput(outputDir, inputRoots, protectedPaths=()):
     project = Path(futsal.__file__).resolve().parents[2]
-    roots = [*map(Path, inputRoots), project / "src", project / "configs", project.parent / "Python"]
+    roots = [*map(Path, inputRoots), project / "src", project / "configs", project / "data" / "raw"]
     output = Path(outputDir).resolve()
     for root in roots:
         validateNewOutput(output, root, [*roots, *protectedPaths])

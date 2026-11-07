@@ -6,6 +6,9 @@ from pathlib import Path
 
 def validateOutputDirectory(outputDir: Path, dataRoot: Path, protectedPaths=()) -> Path:
     outputDir, dataRoot = outputDir.resolve(), dataRoot.resolve()
+    rawRoot = Path(__file__).resolve().parents[3] / "data" / "raw"
+    if outputDir.is_relative_to(rawRoot):
+        raise ValueError("outputDir must be outside dataRoot to protect local raw sources.")
     if outputDir.is_relative_to(dataRoot):
         raise ValueError("outputDir must be outside dataRoot to protect source data.")
     if outputDir.exists() and not outputDir.is_dir():

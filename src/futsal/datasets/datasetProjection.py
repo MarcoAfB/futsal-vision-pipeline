@@ -25,6 +25,7 @@ from futsal.datasets.frameExtraction import readSelectedFrames
 from futsal.datasets.projectionPlan import buildProjectionPlan
 from futsal.datasets.recipes import activeTasks, loadRecipe
 from futsal.datasets.reviewImages import renderReviewImage
+from futsal.datasets.sourceTransition import projectionRecipe
 from futsal.evaluation.evaluationData import validateResearchOutput
 from futsal.inventory.catalog import hashFile, resolveSourcePath
 from futsal.inventory.yoloInventory import scanFiles
@@ -104,7 +105,8 @@ def prepareProjection(sourceDatasetDir, configPath, dataRoot, outputDir, progres
     outputDir = validateResearchOutput(outputDir, [parentDir, dataRoot], [Path(configPath)])
     verifyDataset(parentDir, progress=progress)
     parent = loadDatasetPlan(parentDir / "plan.json")
-    plan = buildProjectionPlan(parent, loadRecipe(Path(configPath)))
+    recipe = projectionRecipe(parent, loadRecipe(Path(configPath)), dataRoot)
+    plan = buildProjectionPlan(parent, recipe)
     samples = developmentSamples(plan)
     images = parentImages(parentDir, readJson(parentDir / "manifest.json"), {s["recordId"] for s in samples})
     requireDiskSpace(outputDir, sum(s["dimensions"][0] * s["dimensions"][1] * 3 for s in samples if s["recordId"] not in images))
