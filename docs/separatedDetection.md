@@ -1,5 +1,9 @@
 # Independent object and court detectors
 
+For optional synthetic supplementation of the same court detector, see
+[synthetic court training](syntheticCourt.md). Generation runs independently;
+the profiles and real-only workflow below remain the defaults.
+
 The separated detection recipe defines detailedObjects (ball and four athlete
 classes) and courtPoints (twenty detection classes). Each model starts independently
 from the official YOLO26n checkpoint. Court landmarks retain the existing 1/64 by

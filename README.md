@@ -1,5 +1,9 @@
 # Futsal
 
+The court detector supports an independently generated synthetic training supplement.
+Use the same training profile with or without `--syntheticDir`; see
+[generation, training and comparison](docs/syntheticCourt.md).
+
 A reproducible foundation for futsal computer vision research, with source
 registration, read-only auditing and curriculum dataset preparation. The first
 experiment targets one detector for ball, four athlete classes and twenty court
