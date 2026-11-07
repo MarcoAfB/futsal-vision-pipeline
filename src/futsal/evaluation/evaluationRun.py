@@ -145,6 +145,9 @@ def evaluateRun(runDir, datasetDir, configPath, selection, outputDir, progress=p
         writeJson(outputDir / "evidence" / "codeSnapshot.json", state["code"])
         shutil.copyfile(runDir / "run.json", outputDir / "evidence" / "trainingRun.json")
         shutil.copyfile(runDir / "selection.json", outputDir / "evidence" / "trainingSelection.json")
+        if run.get("syntheticSource"):
+            for name in ("syntheticContract.json", "syntheticManifest.jsonl"):
+                shutil.copyfile(runDir / "inputs" / name, outputDir / "evidence" / name)
         progress("Checking the prepared bundle and archived training artifacts before evaluation...")
         state["bundleBefore"] = verifyBundleUnchanged(datasetDir, contract, contractHash)
         verifyEvidence(runDir, run["artifacts"])

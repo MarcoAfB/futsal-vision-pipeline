@@ -64,6 +64,7 @@ def main(argv: list[str] | None = None) -> int:
     trainParser.add_argument("--outputDir", type=Path, required=True)
     trainParser.add_argument("--seed", type=int)
     trainParser.add_argument("--continueFrom", type=Path)
+    trainParser.add_argument("--syntheticDir", type=Path, help="Previously generated court training supplement.")
     trainParser.add_argument("--reportRoot", type=Path)
     trainParser.add_argument("--workRoot", type=Path)
     trainParser.add_argument("--evaluationConfig", type=Path, default=Path("configs/evaluation/researchValidation.yaml"))
@@ -129,7 +130,8 @@ def main(argv: list[str] | None = None) -> int:
         try:
             run = runTraining(arguments.datasetDir, arguments.config, arguments.weights,
                               arguments.outputDir, progress=lambda message: print(message, flush=True),
-                              seed=arguments.seed, continueFrom=arguments.continueFrom)
+                              seed=arguments.seed, continueFrom=arguments.continueFrom,
+                              syntheticDir=arguments.syntheticDir)
         except (OSError, ValueError) as error:
             parser.exit(2, f"Training could not start: {error}\n")
         print(f"Training status: {run['status']}; record: {arguments.outputDir / 'run.json'}")

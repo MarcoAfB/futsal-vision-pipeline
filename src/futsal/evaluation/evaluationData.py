@@ -68,6 +68,13 @@ def evaluationTasks(datasetDir, runDir, run, selection):
     if hashFile(Path(runDir) / "selection.json") != run["selectionSha256"]:
         raise ValueError("Training selection changed since the run.")
     tasks = {task["taskId"]: task for task in activeTasks(plan["recipe"])}
+    if run["configuration"].get("sourcePolicy") == "realWithSyntheticCourt":
+        from futsal.training.syntheticTraining import loadSyntheticSnapshot
+        from futsal.training.trainingData import selectTrainingData
+
+        snapshot = loadSyntheticSnapshot(runDir, run["configuration"], tasks["courtPoints"]["classes"])
+        if not run.get("syntheticIntegrityAfterRun") or saved != selectTrainingData(datasetDir, run["configuration"], snapshot):
+            raise ValueError("Mixed run differs from its complete verified real and synthetic selection.")
     result = {}
     for stage in run["configuration"]["stages"]:
         taskId = stage["taskId"]

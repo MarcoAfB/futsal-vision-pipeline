@@ -94,7 +94,8 @@ def executeStages(config, selection, initialWeights, runDir, run, evidence, prog
         inputWeights = runDir / result["checkpoints"]["best"]["path"]
 
 
-def runTraining(datasetDir, configPath, weightsPath, outputDir, progress=print, *, seed=None, continueFrom=None):
+def runTraining(datasetDir, configPath, weightsPath, outputDir, progress=print, *, seed=None,
+                continueFrom=None, syntheticDir=None):
     datasetDir, configPath, weightsPath = (Path(path).resolve() for path in
                                            (datasetDir, configPath, weightsPath))
     projectRoot = Path(futsal.__file__).resolve().parents[2]
@@ -106,6 +107,13 @@ def runTraining(datasetDir, configPath, weightsPath, outputDir, progress=print, 
         validateNewOutput(runDir, continueFrom, [continueFrom])
     config = loadTrainingConfig(configPath, readJson(datasetDir / "plan.json")["recipe"])
     sourceConfig = dict(config)
+    if syntheticDir is not None:
+        from futsal.training.syntheticTraining import requireCourtTraining
+
+        requireCourtTraining(config)
+        syntheticDir = Path(syntheticDir).resolve()
+        validateNewOutput(runDir, syntheticDir, [syntheticDir])
+        config = {**config, "sourcePolicy": "realWithSyntheticCourt"}
     if seed is not None:
         if type(seed) is not int or seed < 0:
             raise ValueError("Seed override must be a nonnegative integer.")
@@ -117,8 +125,10 @@ def runTraining(datasetDir, configPath, weightsPath, outputDir, progress=print, 
            "datasetDirectory": str(datasetDir), "stages": [], "testEvaluated": False}
     run["configurationId"] = hashJson(config)
     run["configurationOverrides"] = {} if seed is None else {"seed": seed}
+    if syntheticDir is not None:
+        run["configurationOverrides"]["sourcePolicy"] = "realWithSyntheticCourt"
     saveRun(runDir, run)
-    contract, contractHash, evidence = None, None, None
+    contract, contractHash, evidence, syntheticSnapshot = None, None, None, None
     try:
         run["code"] = snapshotCode(runDir)
         inputs = runDir / "inputs"
@@ -129,6 +139,14 @@ def runTraining(datasetDir, configPath, weightsPath, outputDir, progress=print, 
         if loadTrainingConfig(inputs / "training.yaml", readJson(datasetDir / "plan.json")["recipe"]) != sourceConfig:
             raise ValueError("Training configuration changed during input snapshot.")
         writeJson(inputs / "resolvedTraining.json", config)
+        if syntheticDir is not None:
+            from futsal.training.syntheticTraining import archiveSyntheticSource
+
+            recipe = readJson(datasetDir / "plan.json")["recipe"]
+            classes = next(task["classes"] for task in recipe["tasks"] if task["taskId"] == "courtPoints")
+            syntheticSnapshot = archiveSyntheticSource(syntheticDir, inputs, classes)
+            run["syntheticSource"] = {"contractId": syntheticSnapshot[0]["contractId"],
+                                      "imageCount": len(syntheticSnapshot[1])}
         if verifyWeights(inputs / weightsPath.name, config["modelSize"]) != weights:
             raise ValueError("Initial checkpoint changed during input snapshot.")
         run["inputEvidence"] = [fileEvidence(path, runDir) for path in sorted(inputs.iterdir())]
@@ -143,10 +161,13 @@ def runTraining(datasetDir, configPath, weightsPath, outputDir, progress=print, 
         run["contractId"] = contract["contractId"]
         method = {key: value for key, value in config.items() if key not in
                   {"seed", "device", "evaluationDevice", "numThreads"}}
-        run["methodId"] = hashJson({"configuration": method, "contractId": run["contractId"],
-                                    "initialWeightsSha256": weights["sha256"]})
-        selection = selectTrainingData(datasetDir, config)
-        evidence = copyRuntimeData(datasetDir, runDir, selection)
+        methodInputs = {"configuration": method, "contractId": run["contractId"],
+                        "initialWeightsSha256": weights["sha256"]}
+        if syntheticSnapshot is not None:
+            methodInputs["syntheticContractId"] = syntheticSnapshot[0]["contractId"]
+        run["methodId"] = hashJson(methodInputs)
+        selection = selectTrainingData(datasetDir, config, syntheticSnapshot)
+        evidence = copyRuntimeData(datasetDir, runDir, selection, syntheticDir=syntheticDir)
         run["selectionSha256"] = hashFile(runDir / "selection.json")
         if continueFrom is not None:
             continueCompletedStages(continueFrom, runDir, run)
@@ -164,6 +185,15 @@ def runTraining(datasetDir, configPath, weightsPath, outputDir, progress=print, 
         saveRun(runDir, run)
     finally:
         integrityErrors = []
+        if syntheticSnapshot is not None:
+            from futsal.datasets.syntheticCourt import verifySyntheticCourt
+
+            try:
+                if verifySyntheticCourt(syntheticDir) != syntheticSnapshot[0]:
+                    raise ValueError("Synthetic source contract changed during training.")
+                run["syntheticIntegrityAfterRun"] = True
+            except (OSError, ValueError, KeyError) as error:
+                integrityErrors.append(str(error))
         if contract is not None:
             progress("Checking prepared bundle hashes and membership after the run...")
             try:

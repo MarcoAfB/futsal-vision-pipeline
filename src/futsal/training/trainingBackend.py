@@ -146,10 +146,12 @@ def trainNativeStage(config, task, stage, inputWeights, stageDir, runDir, runtim
                  "single_cls": False, "classes": None, "compile": False,
                  "nbs": parameters.get("nbs", 2), "nms": False}
     trainer = AuditedDetectionTrainer(overrides=overrides)
+    trainingCounts = {"batches": 0, "optimizerUpdates": 0}
     if trainer.save_dir.resolve() != stageDir.resolve():
         raise ValueError("Backend changed the requested new stage directory.")
 
     def beforeTraining(current):
+        current.optimizer.register_step_post_hook(afterOptimizerStep)
         verifyEvidence(runDir, runtimeEvidence)
         loaders = {split: verifyLoader(loader.dataset, task, split, runDir) for split, loader in
                    (("training", current.train_loader), ("validation", current.test_loader))}
@@ -164,6 +166,7 @@ def trainNativeStage(config, task, stage, inputWeights, stageDir, runDir, runtim
             raise ValueError("Each stage must start a fresh optimizer and epoch zero.")
 
     def afterBatch(current):
+        trainingCounts["batches"] += 1
         losses = {key: float(value.detach().cpu()) for key, value in current.loss_items.items()}
         if not all(math.isfinite(value) for value in losses.values()):
             raise ValueError("Training returned nonfinite losses.")
@@ -175,12 +178,16 @@ def trainNativeStage(config, task, stage, inputWeights, stageDir, runDir, runtim
                    for value in model.state_dict().values()):
             raise ValueError("Training produced nonfinite model tensors.")
 
+    def afterOptimizerStep(optimizer, args, kwargs):
+        trainingCounts["optimizerUpdates"] += 1
+
     history = []
 
     def afterFitEpoch(current):
         row = {"epoch": current.epoch + 1, "fitness": float(current.fitness),
                "bestFitness": float(current.best_fitness), "accumulate": current.accumulate,
-               "learningRates": [group["lr"] for group in current.optimizer.param_groups]}
+               "learningRates": [group["lr"] for group in current.optimizer.param_groups],
+               **trainingCounts}
         if not math.isfinite(row["fitness"]) or not math.isfinite(row["bestFitness"]):
             raise ValueError("Training returned nonfinite checkpoint selection fitness.")
         history.append(row)
@@ -206,6 +213,7 @@ def trainNativeStage(config, task, stage, inputWeights, stageDir, runDir, runtim
         raise ValueError("Validation did not process the exact selected annotations.")
     result = validationMetrics(metrics, names, task["validationSupport"], config["purpose"])
     result["training"] = {"requestedEpochs": stage["epochs"], "completedEpochs": len(history),
+                          **trainingCounts,
                           "bestEpoch": max(row["epoch"] for row in history if row["fitness"] == history[-1]["bestFitness"]),
                           "selectionCriterion": "nativeValidationMap50To95", "elapsedSeconds": elapsed,
                           "device": str(trainer.device), "amp": bool(trainer.amp),
