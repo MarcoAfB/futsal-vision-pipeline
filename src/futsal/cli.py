@@ -2,6 +2,7 @@ import argparse
 from pathlib import Path
 
 from futsal import __version__
+from futsal.training.modelWeights import modelSizes
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -56,7 +57,7 @@ def main(argv: list[str] | None = None) -> int:
     environmentParser.add_argument("--device", default="cpu")
     environmentParser.add_argument("--outputDir", type=Path, required=True)
     weightsParser = commands.add_parser("prepareWeights", help="Obtain official YOLO26 pretrained weights.")
-    weightsParser.add_argument("--modelSize", choices=["n", "s", "m", "l", "x"], default="n")
+    weightsParser.add_argument("--modelSize", choices=modelSizes, default="n")
     weightsParser.add_argument("--outputDir", type=Path, required=True)
     trainParser = commands.add_parser("train", help="Run an audited YOLO26 smoke, pilot or scientific curriculum.")
     trainParser.add_argument("--datasetDir", type=Path, required=True)
@@ -64,6 +65,7 @@ def main(argv: list[str] | None = None) -> int:
     trainParser.add_argument("--weights", type=Path, required=True)
     trainParser.add_argument("--outputDir", type=Path, required=True)
     trainParser.add_argument("--seed", type=int)
+    trainParser.add_argument("--modelSize", choices=modelSizes, help="Override the training profile model size.")
     trainParser.add_argument("--continueFrom", type=Path)
     trainParser.add_argument("--syntheticDir", type=Path, help="Previously generated court training supplement.")
     trainParser.add_argument("--mediaStoreDir", type=Path)
@@ -145,7 +147,7 @@ def main(argv: list[str] | None = None) -> int:
         try:
             run = runTraining(arguments.datasetDir, arguments.config, arguments.weights,
                               arguments.outputDir, progress=lambda message: print(message, flush=True),
-                              seed=arguments.seed, continueFrom=arguments.continueFrom,
+                              seed=arguments.seed, modelSize=arguments.modelSize, continueFrom=arguments.continueFrom,
                               syntheticDir=arguments.syntheticDir, mediaStoreDir=arguments.mediaStoreDir)
         except (OSError, ValueError) as error:
             parser.exit(2, f"Training could not start: {error}\n")

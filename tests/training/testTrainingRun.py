@@ -157,6 +157,12 @@ def testContinuationReusesOnlyVerifiedCompletedPrefix(trainingBundle, localWeigh
                           progress=lambda message: None, seed=43, continueFrom=previousDir)
     assert changed["status"] == "failed" and calls == []
     assert "configurationId" in changed["error"]["message"]
+    prepareWeights("s", tmp_path / "otherSize")
+    changedSize = runTraining(bundle, configPath, tmp_path / "otherSize/yolo26s.pt",
+                              tmp_path / "changedSize", modelSize="s",
+                              progress=lambda message: None, continueFrom=previousDir)
+    assert changedSize["status"] == "failed" and calls == []
+    assert "configurationId" in changedSize["error"]["message"]
     best = previousDir / previous["stages"][0]["results"]["checkpoints"]["best"]["path"]
     best.write_bytes(b"modified checkpoint")
     corrupted = runTraining(bundle, configPath, localWeights, tmp_path / "corruptedPrefix",
@@ -175,3 +181,33 @@ def testSeedOverrideSnapshotsSourceAndEffectiveConfiguration(trainingBundle, loc
     assert readJson(tmp_path / "seed43/inputs/resolvedTraining.json")["seed"] == 43
     assert result["configurationOverrides"] == {"seed": 43}
     assert config["seed"] == 42
+
+
+@pytest.mark.parametrize("modelSize", ["n", "s", "m", "l", "x"])
+def testSizeOverrideSnapshotsEffectiveScaleAndKeepsSource(trainingBundle, localWeights,
+                                                         fakeTraining, tmp_path, modelSize):
+    bundle, configPath, _ = trainingBundle
+    baseline = runTraining(bundle, configPath, localWeights, tmp_path / "baseline", progress=lambda m: None)
+    if modelSize == "n":
+        weights = localWeights
+    else:
+        prepareWeights(modelSize, tmp_path / "selectedWeights")
+        weights = tmp_path / "selectedWeights" / f"yolo26{modelSize}.pt"
+    output = tmp_path / "selected"
+    run = runTraining(bundle, configPath, weights, output, modelSize=modelSize,
+                      seed=43, progress=lambda m: None)
+    assert run["status"] == "completed", run.get("error")
+    assert run["configurationOverrides"] == {"modelSize": modelSize, "seed": 43}
+    assert readJson(output / "inputs/resolvedTraining.json")["modelSize"] == modelSize
+    assert run["initialWeights"]["modelSize"] == modelSize
+    assert (output / "inputs/training.yaml").read_bytes() == configPath.read_bytes()
+    assert run["configurationId"] != baseline["configurationId"]
+    assert (run["methodId"] == baseline["methodId"]) == (modelSize == "n")
+
+
+def testSizeWeightMismatchFailsBeforeCreatingRun(trainingBundle, localWeights, tmp_path):
+    bundle, configPath, _ = trainingBundle
+    output = tmp_path / "mismatch"
+    with pytest.raises(ValueError, match="provenance"):
+        runTraining(bundle, configPath, localWeights, output, modelSize="s")
+    assert not output.exists()

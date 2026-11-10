@@ -55,7 +55,7 @@ def launch(arguments):
     from futsal.datasets.datasetFiles import readJson as readProjectJson
     from futsal.inventory.catalog import resolveSourcePath
     from futsal.training.modelWeights import verifyWeights
-    from futsal.training.trainingConfig import loadTrainingConfig
+    from futsal.training.trainingConfig import loadTrainingConfig, resolveTrainingConfig
     from futsal.training.trainingData import requireDiskSpace, selectTrainingData
 
     project = Path(__file__).resolve().parents[1]
@@ -96,13 +96,10 @@ def launch(arguments):
             shutil.copyfile(Path(__file__).with_name(name), target)
             state["launcherSourceHashes"][name] = hashFile(target)
         plan = readProjectJson(dataset / "plan.json")
-        config = loadTrainingConfig(configPath, plan["recipe"])
+        config = resolveTrainingConfig(loadTrainingConfig(configPath, plan["recipe"]),
+                                       seed=arguments.seed, modelSize=arguments.modelSize)
         if config["schemaVersion"] != 2 or config["device"] == "cpu":
             raise ValueError("Server launcher requires an explicit scientific/pilot single-GPU profile.")
-        if arguments.seed is not None:
-            if arguments.seed < 0:
-                raise ValueError("Seed must be nonnegative.")
-            config["seed"] = arguments.seed
         weights = verifyWeights(weightsPath, config["modelSize"])
         selection = selectTrainingData(dataset, config)
         required = sum(resolveSourcePath(dataset, row[f"{kind}Path"]).stat().st_size
@@ -112,6 +109,7 @@ def launch(arguments):
         state["configSha256"] = hashFile(configPath)
         state["initialWeightsSha256"] = weights["sha256"]
         state["seed"] = config["seed"]
+        state["modelSize"] = config["modelSize"]
         if config["purpose"] == "scientificTraining":
             if arguments.pilotRun is None:
                 raise ValueError("Provide --pilotRun after the resource pilot and profile freeze.")
@@ -128,6 +126,8 @@ def launch(arguments):
                    "--reportRoot", str(arguments.reportRoot.resolve()), "--workRoot", str(arguments.workRoot.resolve())]
         if arguments.seed is not None:
             command += ["--seed", str(arguments.seed)]
+        if arguments.modelSize is not None:
+            command += ["--modelSize", arguments.modelSize]
         if arguments.continueFrom is not None:
             command += ["--continueFrom", str(arguments.continueFrom.resolve())]
         state["status"] = "running"
@@ -148,6 +148,8 @@ def launch(arguments):
 
 
 def main(argv=None):
+    from futsal.training.modelWeights import modelSizes
+
     parser = argparse.ArgumentParser(description="Launch a prepared offline GPU curriculum from a clean, identified checkout.")
     for name in ("datasetDir", "config", "weights", "outputDir", "reportRoot", "workRoot", "logDir"):
         parser.add_argument(f"--{name}", type=Path, required=True)
@@ -155,6 +157,7 @@ def main(argv=None):
     parser.add_argument("--pilotRun", type=Path)
     parser.add_argument("--continueFrom", type=Path)
     parser.add_argument("--seed", type=int)
+    parser.add_argument("--modelSize", choices=modelSizes)
     return launch(parser.parse_args(argv))
 
 

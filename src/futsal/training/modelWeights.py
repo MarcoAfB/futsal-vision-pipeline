@@ -6,6 +6,13 @@ import futsal
 from futsal.datasets.datasetFiles import readJson, stagedDirectory, writeJson
 from futsal.inventory.catalog import hashFile
 
+modelSizes = ("n", "s", "m", "l", "x")
+
+
+def validateModelSize(modelSize):
+    if not isinstance(modelSize, str) or modelSize not in modelSizes:
+        raise ValueError("YOLO26 modelSize must be n, s, m, l or x.")
+
 
 def downloadWeights(url, destination):
     request = urllib.request.Request(url, headers={"User-Agent": "FutsalResearch/0.1"})
@@ -14,8 +21,7 @@ def downloadWeights(url, destination):
 
 
 def prepareWeights(modelSize, outputDir):
-    if modelSize not in {"n", "s", "m", "l", "x"}:
-        raise ValueError("YOLO26 modelSize must be n, s, m, l or x.")
+    validateModelSize(modelSize)
     filename = f"yolo26{modelSize}.pt"
     url = f"https://github.com/ultralytics/assets/releases/download/v8.4.0/{filename}"
     with stagedDirectory(outputDir, Path(futsal.__file__).resolve().parent) as staging:
@@ -31,6 +37,7 @@ def prepareWeights(modelSize, outputDir):
 
 
 def verifyWeights(path, modelSize):
+    validateModelSize(modelSize)
     path = Path(path).resolve()
     metadata = readJson(path.with_name("weights.json"))
     expectedUrl = f"https://github.com/ultralytics/assets/releases/download/v8.4.0/yolo26{modelSize}.pt"

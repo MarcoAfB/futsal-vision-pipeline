@@ -1,5 +1,31 @@
 # YOLO26 training
 
+## Model size
+
+All training profiles accept YOLO26 `n`, `s`, `m`, `l` and `x`, including the
+curriculum, independent object/player/ball/court tasks, pilots and CPU smoke.
+Existing profiles default to `modelSize: n`. Set `modelSize` in the YAML or pass
+`--modelSize` to override it for one run; the CLI value takes precedence.
+
+```text
+uv run python -m futsal prepareWeights --modelSize s --outputDir data/modelWeights/yolo26s
+uv run python -m futsal train --datasetDir data/views/allDetection --mediaStoreDir data/mediaStore --config configs/training/detailedObjects.yaml --modelSize s --weights data/modelWeights/yolo26s/yolo26s.pt --outputDir outputs/training/objectsSSeed42
+```
+
+Use an existing compatible dataset/view and its media store. Prepare weights once
+per size and reuse them; training requires the explicitly selected official weights
+and their `weights.json`. A size/provenance mismatch fails before creating the run.
+Training never downloads replacement weights or adjusts batch/resolution automatically.
+
+The source YAML is archived unchanged. `inputs/resolvedTraining.json`, `run.json`
+and configuration/method identities record the effective size and any CLI override.
+One size applies to every stage of a curriculum. Continuation requires the same
+effective configuration and weights. `scripts/runServerTraining.py` also accepts
+`--modelSize`, uses it in preflight and forwards it to training; a required resource
+pilot must match that size, initialization and resource profile.
+
+## Environment
+
 The training extra pins the technical CPU reference environment: PyTorch 2.9.1,
 torchvision 0.24.1 and ultralytics-opencv-headless 8.4.190 on Python 3.12/3.13.
 PyTorch wheels come from the official CPU index. The default installation does

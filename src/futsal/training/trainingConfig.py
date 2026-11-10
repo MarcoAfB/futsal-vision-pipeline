@@ -3,6 +3,19 @@ from pathlib import Path
 
 from futsal.datasets.recipes import activeTasks
 from futsal.inventory.catalog import readYaml
+from futsal.training.modelWeights import validateModelSize
+
+
+def resolveTrainingConfig(config, *, seed=None, modelSize=None):
+    resolved = dict(config)
+    if modelSize is not None:
+        validateModelSize(modelSize)
+        resolved["modelSize"] = modelSize
+    if seed is not None:
+        if type(seed) is not int or seed < 0:
+            raise ValueError("Seed override must be a nonnegative integer.")
+        resolved["seed"] = seed
+    return resolved
 
 
 def loadTrainingConfig(path, recipe):
@@ -14,11 +27,12 @@ def loadTrainingConfig(path, recipe):
         required |= {"evaluationDevice", "sourcePolicy"}
     if set(data) != required or data["schemaVersion"] not in {1, 2}:
         raise ValueError("Training configuration requires supported schemaVersion 1 or 2 fields.")
-    if not scientific and (data["purpose"] != "technicalSmoke" or data["modelSize"] != "n" or data["device"] != "cpu"):
-        raise ValueError("This delivery supports technicalSmoke with YOLO26n on CPU.")
+    validateModelSize(data["modelSize"])
+    if not scientific and (data["purpose"] != "technicalSmoke" or data["device"] != "cpu"):
+        raise ValueError("Schema 1 requires technicalSmoke with YOLO26 on CPU.")
     if scientific:
-        if data["purpose"] not in {"scientificTraining", "scientificPilot"} or data["modelSize"] != "n":
-            raise ValueError("Schema 2 requires scientificTraining or scientificPilot with YOLO26n.")
+        if data["purpose"] not in {"scientificTraining", "scientificPilot"}:
+            raise ValueError("Schema 2 requires scientificTraining or scientificPilot with YOLO26.")
         if data["sourcePolicy"] != "realOnly":
             raise ValueError("Scientific training and pilots require sourcePolicy realOnly.")
         if data["trainSampleCount"] is not None or data["validationSampleCount"] is not None:

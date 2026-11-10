@@ -19,7 +19,7 @@ from futsal.inventory.yoloInventory import scanFiles
 from futsal.reporting.report import atomicWrite
 from futsal.training.modelWeights import verifyWeights
 from futsal.training.trainingBackend import initializeBackend, trainStage
-from futsal.training.trainingConfig import loadTrainingConfig
+from futsal.training.trainingConfig import loadTrainingConfig, resolveTrainingConfig
 from futsal.training.trainingContinuation import continueCompletedStages
 from futsal.training.trainingData import copyRuntimeData, selectTrainingData
 from futsal.training.trainingEnvironment import inspectEnvironment
@@ -101,7 +101,7 @@ def executeStages(config, selection, initialWeights, runDir, run, evidence, prog
 
 
 def runTraining(datasetDir, configPath, weightsPath, outputDir, progress=print, *, seed=None,
-                continueFrom=None, syntheticDir=None, mediaStoreDir=None):
+                modelSize=None, continueFrom=None, syntheticDir=None, mediaStoreDir=None):
     datasetDir, configPath, weightsPath = (Path(path).resolve() for path in
                                            (datasetDir, configPath, weightsPath))
     projectRoot = Path(futsal.__file__).resolve().parents[2]
@@ -122,8 +122,8 @@ def runTraining(datasetDir, configPath, weightsPath, outputDir, progress=print, 
     validateNewOutput(runDir, projectRoot / "data" / "raw")
     if continueFrom is not None:
         validateNewOutput(runDir, continueFrom, [continueFrom])
-    config = loadTrainingConfig(configPath, readJson(datasetDir / "plan.json")["recipe"])
-    sourceConfig = dict(config)
+    sourceConfig = loadTrainingConfig(configPath, readJson(datasetDir / "plan.json")["recipe"])
+    config = resolveTrainingConfig(sourceConfig, seed=seed, modelSize=modelSize)
     if syntheticDir is not None:
         from futsal.training.syntheticTraining import requireCourtTraining
 
@@ -131,17 +131,14 @@ def runTraining(datasetDir, configPath, weightsPath, outputDir, progress=print, 
         syntheticDir = Path(syntheticDir).resolve()
         validateNewOutput(runDir, syntheticDir, [syntheticDir])
         config = {**config, "sourcePolicy": "realWithSyntheticCourt"}
-    if seed is not None:
-        if type(seed) is not int or seed < 0:
-            raise ValueError("Seed override must be a nonnegative integer.")
-        config = {**config, "seed": seed}
     weights = verifyWeights(weightsPath, config["modelSize"])
     runDir.mkdir(parents=True, exist_ok=False)
     run = {"schemaVersion": 1, "purpose": config["purpose"], "status": "running",
            "startedAt": utcNow(), "configuration": config, "initialWeights": weights,
            "datasetDirectory": str(datasetDir), "stages": [], "testEvaluated": False}
     run["configurationId"] = hashJson(config)
-    run["configurationOverrides"] = {} if seed is None else {"seed": seed}
+    run["configurationOverrides"] = {key: value for key, value in
+                                     (("seed", seed), ("modelSize", modelSize)) if value is not None}
     if syntheticDir is not None:
         run["configurationOverrides"]["sourcePolicy"] = "realWithSyntheticCourt"
     saveRun(runDir, run)

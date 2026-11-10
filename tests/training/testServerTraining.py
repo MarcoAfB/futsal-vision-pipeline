@@ -15,12 +15,13 @@ import runServerTraining
 
 
 @pytest.mark.parametrize("failure", ["environment", "training", "none"])
-def testOfflineLauncherUsesCurrentInterpreterAndKeepsExitStatus(trainingBundle, tmp_path, monkeypatch, failure):
+@pytest.mark.parametrize("modelSize", ["n", "s"])
+def testOfflineLauncherUsesCurrentInterpreterAndKeepsExitStatus(trainingBundle, tmp_path, monkeypatch, failure, modelSize):
     bundle, configPath, _ = trainingBundle
     config = yaml.safe_load(Path("configs/training/yolo26CurriculumPilot.yaml").read_text(encoding="utf-8"))
     configPath.write_text(yaml.safe_dump(config), encoding="utf-8")
     monkeypatch.setattr("futsal.training.modelWeights.downloadWeights", lambda url, path: path.write_bytes(b"fixture"))
-    prepareWeights("n", tmp_path / "weights")
+    prepareWeights(modelSize, tmp_path / "weights")
     commit = "1" * 40
     monkeypatch.setattr(runServerTraining, "gitOutput", lambda root, *args: commit if args[0] == "rev-parse" else "")
     calls = []
@@ -32,7 +33,8 @@ def testOfflineLauncherUsesCurrentInterpreterAndKeepsExitStatus(trainingBundle, 
         return SimpleNamespace(returncode=3 if failure == "environment" or (failure == "training" and "train" in arguments) else 0)
 
     monkeypatch.setattr(runServerTraining.subprocess, "run", command)
-    arguments = ["--datasetDir", str(bundle), "--config", str(configPath), "--weights", str(tmp_path / "weights/yolo26n.pt"),
+    arguments = ["--datasetDir", str(bundle), "--config", str(configPath), "--weights", str(tmp_path / "weights" / f"yolo26{modelSize}.pt"),
+                 "--modelSize", modelSize,
                  "--outputDir", str(tmp_path / "attempt"), "--reportRoot", str(tmp_path / "reports"),
                  "--workRoot", str(tmp_path / "work"), "--logDir", str(tmp_path / "launch"), "--expectedCommit", commit]
     code = runServerTraining.main(arguments)
@@ -44,6 +46,9 @@ def testOfflineLauncherUsesCurrentInterpreterAndKeepsExitStatus(trainingBundle, 
         assert len(calls) == 2 and "--reportRoot" in calls[-1]
         assert state["trainingExitCode"] == code
     assert state["pythonExecutable"] == sys.executable
+    assert state["modelSize"] == modelSize
+    if failure != "environment":
+        assert calls[-1][calls[-1].index("--modelSize") + 1] == modelSize
 
 
 def testScientificLaunchRequiresMatchingCompletedPilot(trainingBundle, tmp_path):
@@ -67,6 +72,10 @@ def testScientificLaunchRequiresMatchingCompletedPilot(trainingBundle, tmp_path)
     with pytest.raises(ValueError, match="changed after the pilot"):
         runServerTraining.validatePilot(root, config, selection, pilot["initialWeights"], "fixtureContract", "fixtureCommit")
     config["parameters"]["batch"] = 2
+    config["modelSize"] = "s"
+    with pytest.raises(ValueError, match="scale"):
+        runServerTraining.validatePilot(root, config, selection, pilot["initialWeights"], "fixtureContract", "fixtureCommit")
+    config["modelSize"] = "n"
     pilot["status"] = "failed"
     writeJson(root / "run.json", pilot)
     with pytest.raises(ValueError, match="completed, verified pilot"):
