@@ -76,9 +76,11 @@ def configurationInputs(objectsRunDir, courtRunDir, datasetDir, referenceDataset
     components = [loadComponent(objectsRunDir, "detailedObjects", datasetDir, names[:5]),
                   loadComponent(courtRunDir, "courtPoints", datasetDir, names[5:])]
     first, second = [item["run"] for item in components]
-    fields = ("modelSize", "seed", "device", "evaluationDevice", "parameters", "numThreads")
-    if any(first["configuration"][key] != second["configuration"][key] for key in fields) or first["initialWeights"] != second["initialWeights"]:
-        raise ValueError("Independent components require identical official initialization and shared protocol.")
+    fields = ("seed", "device", "evaluationDevice", "parameters", "numThreads")
+    if any(first["configuration"][key] != second["configuration"][key] for key in fields):
+        raise ValueError("Independent components require a shared protocol apart from model size.")
+    if first["configuration"]["modelSize"] == second["configuration"]["modelSize"] and first["initialWeights"] != second["initialWeights"]:
+        raise ValueError("Components of the same model size require identical official initialization.")
     if first["configuration"]["stages"][0]["epochs"] != second["configuration"]["stages"][0]["epochs"]:
         raise ValueError("Independent component epoch budgets differ.")
     if first["code"]["commit"] != second["code"]["commit"] or first["code"]["files"] != second["code"]["files"]:

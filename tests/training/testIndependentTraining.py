@@ -21,8 +21,8 @@ def testIndependentProfilesAreSingleStageAndShareDeclaredProtocol(projectionBund
 
 
 @pytest.mark.trainingIntegration
-@pytest.mark.parametrize("shared", [False, True])
-def testNativeIndependentModelsStartFromSameOfficialInput(projectionBundle, tmp_path, monkeypatch, shared):
+@pytest.mark.parametrize("shared,objectsSize,courtSize", [(False, "n", "n"), (True, "n", "n"), (True, "s", "n")])
+def testNativeIndependentModelsUseSelectedOfficialInputs(projectionBundle, tmp_path, monkeypatch, shared, objectsSize, courtSize):
     from futsal.training.modelWeights import prepareWeights
     from futsal.training.trainingBackend import initializeBackend
     from futsal.training.trainingRun import runTraining
@@ -51,11 +51,14 @@ def testNativeIndependentModelsStartFromSameOfficialInput(projectionBundle, tmp_
     monkeypatch.setattr("requests.sessions.Session.request", rejectNetwork)
     monkeypatch.setattr("urllib.request.urlopen", rejectNetwork)
     monkeypatch.setattr("futsal.training.modelWeights.downloadWeights", lambda url, destination:
-                        torch.save({"model": DetectionModel("yolo26n.yaml", nc=80, verbose=False)}, destination))
-    prepareWeights("n", tmp_path / "weights")
-    weights = tmp_path / "weights/yolo26n.pt"
-    original = hashFile(weights)
+                        torch.save({"model": DetectionModel(f"{Path(url).stem}.yaml", nc=80, verbose=False)}, destination))
+    for modelSize in dict.fromkeys((objectsSize, courtSize)):
+        prepareWeights(modelSize, tmp_path / f"weights{modelSize}")
+    originals = {}
     for taskId, count in (("detailedObjects", 5), ("courtPoints", 20)):
+        modelSize = objectsSize if taskId == "detailedObjects" else courtSize
+        weights = tmp_path / f"weights{modelSize}" / f"yolo26{modelSize}.pt"
+        original = originals[weights] = hashFile(weights)
         config = yaml.safe_load(Path(f"configs/training/{taskId}.yaml").read_text(encoding="utf-8"))
         config.update(device="cpu", evaluationDevice="cpu")
         config["parameters"].update(imgsz=64, batch=1, nbs=2, workers=0, warmup_epochs=0.0, patience=0)
@@ -63,14 +66,15 @@ def testNativeIndependentModelsStartFromSameOfficialInput(projectionBundle, tmp_
         configFile = tmp_path / f"{taskId}.yaml"
         configFile.write_text(yaml.safe_dump(config), encoding="utf-8")
         runDir = tmp_path / taskId
-        run = runTraining(bundle, configFile, weights, runDir, progress=lambda message: None, **options)
+        run = runTraining(bundle, configFile, weights, runDir, modelSize=modelSize,
+                          progress=lambda message: None, **options)
         assert run["status"] == "completed", run.get("error")
         stage = run["stages"][0]
         assert stage["inputWeights"]["sha256"] == original
         assert stage["results"]["checkpoints"]["best"]["classCount"] == count
         assert stage["results"]["training"]["completedEpochs"] == 2
         assert readJson(runDir / stage["directory"] / "optimizer.json")["initialStateEntries"] == 0
-    assert hashFile(weights) == original
+    assert all(hashFile(path) == digest for path, digest in originals.items())
     from futsal.evaluation.configurationRun import evaluateConfiguration
     from futsal.reporting.researchReport import renderReport
 
@@ -88,6 +92,15 @@ def testNativeIndependentModelsStartFromSameOfficialInput(projectionBundle, tmp_
     points = readJson(output / "evidence/joint/points.json")
     assert next(row for row in points["perClass"] if row["className"] == "lowerCornerSideB")["successRates"]["0.01"] is None
     assert renderReport(output).is_file()
+    import copy
+
+    from futsal.evaluation.configurationBackend import predictConfiguration
+
+    changed = copy.deepcopy(state["components"])
+    changed[0]["run"]["configuration"]["modelSize"] = "x"
+    with pytest.raises(ValueError, match="recorded model size"):
+        predictConfiguration(changed, {"taskId": "unified25", "classes": state["classes"]}, [],
+                             run["configuration"], state["protocol"], state["workDirectory"])
     before = hashFile(output / "evaluationContract.json")
     import sys
 
@@ -95,4 +108,5 @@ def testNativeIndependentModelsStartFromSameOfficialInput(projectionBundle, tmp_
     monkeypatch.setitem(sys.modules, "ultralytics", None)
     text = renderReport(output, tmp_path / "regenerated").read_text(encoding="utf-8")
     assert "Two independent detectors" in text and "N/A" in text
+    assert f"yolo26{objectsSize}" in text and f"yolo26{courtSize}" in text
     assert hashFile(output / "evaluationContract.json") == before

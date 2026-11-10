@@ -24,6 +24,12 @@ effective configuration and weights. `scripts/runServerTraining.py` also accepts
 `--modelSize`, uses it in preflight and forwards it to training; a required resource
 pilot must match that size, initialization and resource profile.
 
+The existing detailed-object/court joint evaluator accepts independent model
+sizes. It verifies each checkpoint's actual scale and records model/weight hashes
+per component. Its other shared-protocol requirements still apply, including
+matching batch, resolution, seed and code snapshots. Standalone validation also
+checks that checkpoint scale agrees with the archived training configuration.
+
 ## Environment
 
 The training extra pins the technical CPU reference environment: PyTorch 2.9.1,

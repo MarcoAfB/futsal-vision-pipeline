@@ -20,7 +20,7 @@ from futsal.training.trainingRun import fileEvidence, utcNow
 def configurationMarkdown(root, state):
     lines = ["# Independent object and court detection", "",
              f"Evaluation: **{state['status']}**. Selection: **commonValidation**. Test evaluated: **False**.", "",
-             "Two independent detectors start from the same official checkpoint. Object and landmark outputs "
+             "Two independent detectors start from their respective official YOLO26 checkpoints. Object and landmark outputs "
              "are mapped to canonical classes and capped globally before native AP matching. This is a single-seed "
              "quality result; no inference benchmark or significance test is reported.", ""]
     if state["status"] != "completed":
@@ -28,9 +28,12 @@ def configurationMarkdown(root, state):
     components = []
     for item in state["components"]:
         selected = readJson(root / "evidence/components" / item["taskId"] / "selection.json")["tasks"][item["taskId"]]
-        components.append([item["taskId"], len(item["classes"]), item["run"]["configuration"]["seed"],
-                           len(selected["training"]), len(selected["validation"]), item["run"]["initialWeights"]["sha256"]])
-    lines += markdownTable(["Component", "Classes", "Seed", "Train", "Validation", "Initial SHA-256"], components)
+        components.append([item["taskId"], f"yolo26{item['run']['configuration']['modelSize']}",
+                           len(item["classes"]), item["run"]["configuration"]["seed"],
+                           len(selected["training"]), len(selected["validation"]),
+                           item["run"]["initialWeights"]["sha256"], item["checkpoint"]["sha256"]])
+    lines += markdownTable(["Component", "Model", "Classes", "Seed", "Train", "Validation",
+                            "Initial SHA-256", "Checkpoint SHA-256"], components)
     evidence = root / "evidence/joint"
     detection, points = readJson(evidence / "detection.json"), readJson(evidence / "points.json")
     stageTables(detection, points, root / "tables")

@@ -30,6 +30,8 @@ def predictConfiguration(components, task, references, trainingConfig, config, w
     models = []
     for component in components:
         model, _ = load_checkpoint(Path(component["checkpointPath"]), device=device, fuse=False)
+        if model.yaml.get("scale") != component["run"]["configuration"]["modelSize"]:
+            raise ValueError("Component checkpoint differs from its recorded model size.")
         if model.names != dict(enumerate(component["classes"])) or not model.end2end or model.model[-1].nc != len(component["classes"]):
             raise ValueError("Component checkpoint ontology or YOLO26 mode changed.")
         model.eval().float()

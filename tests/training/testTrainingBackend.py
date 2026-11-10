@@ -32,10 +32,12 @@ def testLoaderRejectsSilentAnnotationDrops(trainingBundle, tmp_path):
 
 
 @pytest.mark.trainingIntegration
-@pytest.mark.parametrize("scientific", [False, True])
-@pytest.mark.parametrize("shared", [False, True])
+@pytest.mark.parametrize("modelSize,scientific,shared", [
+    ("n", False, False), ("n", True, False), ("n", False, True), ("n", True, True),
+    ("s", True, True),
+])
 def testNativeCpuStagesProduceTwoThreeAndTwentyFiveClassCheckpoints(trainingBundle, tmp_path,
-                                                                  monkeypatch, scientific, shared, preparedSources):
+                                                                  monkeypatch, scientific, shared, preparedSources, modelSize):
     from futsal.training.modelWeights import prepareWeights
     from futsal.training.trainingRun import runTraining
 
@@ -90,11 +92,12 @@ def testNativeCpuStagesProduceTwoThreeAndTwentyFiveClassCheckpoints(trainingBund
     monkeypatch.setattr(callbacks, "add_integration_callbacks", addForbiddenCallback)
 
     def fixtureDownload(url, destination):
-        torch.save({"model": DetectionModel("yolo26n.yaml", nc=80, verbose=False)}, destination)
+        torch.save({"model": DetectionModel(f"yolo26{modelSize}.yaml", nc=80, verbose=False)}, destination)
 
     monkeypatch.setattr("futsal.training.modelWeights.downloadWeights", fixtureDownload)
-    prepareWeights("n", tmp_path / "initial")
-    run = runTraining(bundle, configFile, tmp_path / "initial" / "yolo26n.pt", runDir, **options)
+    prepareWeights(modelSize, tmp_path / "initial")
+    run = runTraining(bundle, configFile, tmp_path / "initial" / f"yolo26{modelSize}.pt", runDir,
+                      modelSize=modelSize, **options)
     assert run["status"] == "completed", run.get("error")
     assert run["runtimeIntegrityAfterRun"]
     assert run["bundleIntegrityAfterRun"]["hashesVerified"]
@@ -121,6 +124,13 @@ def testNativeCpuStagesProduceTwoThreeAndTwentyFiveClassCheckpoints(trainingBund
     evaluation = evaluateRun(runDir, bundle, "configs/evaluation/researchValidation.yaml",
                              "runValidation", evaluationDir, **options)
     assert evaluation["status"] == "completed", evaluation.get("error")
+    from futsal.evaluation.evaluationBackend import predictValidation
+
+    final = evaluation["stages"][-1]
+    checkpoint = runDir / run["stages"][-1]["results"]["checkpoints"]["best"]["path"]
+    with pytest.raises(ValueError, match="recorded model size"):
+        predictValidation(checkpoint, {"taskId": "unified25", "classes": final["classes"]}, [], {},
+                          {**run["configuration"], "modelSize": "x"}, {}, tmp_path / "unused")
     assert evaluation["runtimeAfter"] and evaluation["bundleAfter"]["hashesVerified"]
     for stage in evaluation["stages"]:
         evidenceDir = evaluationDir / stage["evidenceDirectory"]

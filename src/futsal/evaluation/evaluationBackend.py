@@ -19,6 +19,8 @@ def predictValidation(checkpoint, task, references, stage, trainingConfig, confi
     requested = trainingConfig.get("evaluationDevice", "cpu")
     device = torch.device("cpu" if requested == "cpu" else f"cuda:{requested}")
     model, _ = load_checkpoint(Path(checkpoint), device=device, fuse=False)
+    if model.yaml.get("scale") != trainingConfig["modelSize"]:
+        raise ValueError("Evaluation checkpoint differs from the recorded model size.")
     if model.names != dict(enumerate(names)) or not model.end2end or model.model[-1].nc != len(names):
         raise ValueError("Evaluation checkpoint differs from the selected stage ontology or YOLO26 mode.")
     configuredStage = next(item for item in trainingConfig["stages"] if item["taskId"] == task["taskId"])

@@ -229,7 +229,7 @@ def projectionBundle(trainingBundle, preparedSources):
 
 
 @pytest.fixture
-def configurationEvaluation(projectionBundle, tmp_path, monkeypatch):
+def configurationEvaluation(projectionBundle, tmp_path, monkeypatch, request):
     import shutil
     from collections import Counter
 
@@ -242,8 +242,12 @@ def configurationEvaluation(projectionBundle, tmp_path, monkeypatch):
     parent, projection, _, _ = projectionBundle
     data = tmp_path / "projected"
     materializeProjection(parent, projection, data, progress=lambda message: None)
-    monkeypatch.setattr("futsal.training.modelWeights.downloadWeights", lambda url, path: path.write_bytes(b"isolated fixture"))
+    monkeypatch.setattr("futsal.training.modelWeights.downloadWeights", lambda url, path: path.write_bytes(Path(url).name.encode()))
     prepareWeights("n", tmp_path / "initial")
+    sizes = getattr(request, "param", ("n", "n"))
+    for size in dict.fromkeys(sizes):
+        if size != "n":
+            prepareWeights(size, tmp_path / f"initial{size}")
     monkeypatch.setattr("futsal.training.trainingRun.inspectEnvironment", lambda device: {"ready": True})
     monkeypatch.setattr("futsal.training.trainingRun.initializeBackend", lambda *args: None)
 
@@ -255,13 +259,14 @@ def configurationEvaluation(projectionBundle, tmp_path, monkeypatch):
 
     monkeypatch.setattr("futsal.training.trainingRun.trainStage", train)
     runs = []
-    for taskId in ("detailedObjects", "courtPoints"):
+    for taskId, size in zip(("detailedObjects", "courtPoints"), sizes, strict=True):
         config = yaml.safe_load(Path(f"configs/training/{taskId}.yaml").read_text(encoding="utf-8"))
         config.update(device="cpu", evaluationDevice="cpu")
         configFile = tmp_path / f"{taskId}.yaml"
         configFile.write_text(yaml.safe_dump(config), encoding="utf-8")
         runDir = tmp_path / taskId
-        assert runTraining(data, configFile, tmp_path / "initial/yolo26n.pt", runDir, progress=lambda message: None)["status"] == "completed"
+        weights = tmp_path / ("initial" if size == "n" else f"initial{size}") / f"yolo26{size}.pt"
+        assert runTraining(data, configFile, weights, runDir, modelSize=size, progress=lambda message: None)["status"] == "completed"
         runs.append(runDir)
     monkeypatch.setattr("futsal.evaluation.configurationRun.initializeBackend", lambda *args: None)
 

@@ -32,3 +32,25 @@ def testJointEvaluationRefusesIncompatibleOrChangedComponents(configurationEvalu
         (root / run["stages"][0]["results"]["checkpoints"]["best"]["path"]).write_bytes(b"changed")
     with pytest.raises(ValueError):
         configurationInputs(*runs, data, parent)
+
+
+def testJointEvaluationAcceptsIndependentModelSizes(configurationEvaluation, tmp_path):
+    from futsal.evaluation.configurationRun import evaluateConfiguration
+    from futsal.training.modelWeights import prepareWeights
+    from futsal.training.trainingRun import runTraining
+
+    _, runs, data, parent, _ = configurationEvaluation
+    prepareWeights("s", tmp_path / "weightsS")
+    objects = tmp_path / "objectsS"
+    run = runTraining(data, tmp_path / "detailedObjects.yaml", tmp_path / "weightsS/yolo26s.pt",
+                      objects, modelSize="s", progress=lambda m: None)
+    assert run["status"] == "completed", run.get("error")
+    result = evaluateConfiguration(objects, runs[1], data, parent, "configs/evaluation/researchValidation.yaml",
+                                   tmp_path / "mixedSizes", progress=lambda m: None)
+    assert result["status"] == "completed", result.get("error")
+    assert [item["run"]["configuration"]["modelSize"] for item in result["components"]] == ["s", "n"]
+    run["configuration"]["parameters"]["batch"] += 1
+    run["configurationId"] = hashJson(run["configuration"])
+    writeJson(objects / "run.json", run)
+    with pytest.raises(ValueError, match="shared protocol"):
+        configurationInputs(objects, runs[1], data, parent)
