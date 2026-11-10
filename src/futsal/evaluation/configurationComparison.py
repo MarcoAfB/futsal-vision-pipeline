@@ -11,6 +11,12 @@ from futsal.evaluation.evaluationData import (
     validateResearchOutput,
 )
 from futsal.evaluation.evaluationRun import sealEvaluation
+from futsal.evaluation.modelComparison import (
+    comparisonModels,
+    modelChanges,
+    validateComparisonMode,
+    validateModelComparison,
+)
 from futsal.inventory.catalog import hashFile
 from futsal.reporting.researchReport import verifyEvaluation
 from futsal.training.trainingRun import utcNow
@@ -20,14 +26,15 @@ def delta(baseline, candidate):
     return candidate - baseline if baseline is not None and candidate is not None else None
 
 
-def validateComparison(baselineDir, candidateDir):
+def validateComparison(baselineDir, candidateDir, *, comparisonMode="controlled"):
     try:
-        return comparisonInputs(baselineDir, candidateDir)
+        return comparisonInputs(baselineDir, candidateDir, comparisonMode=comparisonMode)
     except (KeyError, TypeError, IndexError) as error:
         raise ValueError(f"Incomplete or invalid scientific comparison metadata: {error}.") from error
 
 
-def comparisonInputs(baselineDir, candidateDir):
+def comparisonInputs(baselineDir, candidateDir, *, comparisonMode="controlled"):
+    validateComparisonMode(comparisonMode)
     baseline, baselineSeal = verifyEvaluation(Path(baselineDir))
     candidate, candidateSeal = verifyEvaluation(Path(candidateDir))
     if baseline["status"] != "completed" or candidate["status"] != "completed" or (
@@ -56,13 +63,13 @@ def comparisonInputs(baselineDir, candidateDir):
     if training["contractId"] != baseline["contractId"] or training["stages"][-1]["results"]["checkpoints"]["best"] != stage["checkpoint"]:
         raise ValueError("Baseline evaluation is not bound to its final curriculum checkpoint.")
     original = baseline["training"]["configuration"]
-    current = candidate["components"][0]["run"]["configuration"]
-    if any(original[key] != current[key] for key in ("modelSize", "seed")) or any(
-        original["parameters"][key] != current["parameters"][key] for key in ("imgsz", "amp")
-    ):
-        raise ValueError("Comparison requires the same model scale, seed, resolution and precision.")
-    if baseline["training"]["initialWeights"]["sha256"] != candidate["components"][0]["run"]["initialWeights"]["sha256"]:
-        raise ValueError("Official initialization hashes differ between configurations.")
+    for component in candidate["components"]:
+        current = component["run"]["configuration"]
+        if original["seed"] != current["seed"] or any(
+            original["parameters"][key] != current["parameters"][key] for key in ("imgsz", "amp")
+        ):
+            raise ValueError("Comparison requires the same seed, resolution and precision for every component.")
+        validateModelComparison(training, component["run"], comparisonMode)
     oldRoot, newRoot = Path(baselineDir) / stage["evidenceDirectory"], Path(candidateDir) / "evidence/joint"
     refs = readJsonLines(oldRoot / "references.jsonl")
     newRefs = readJsonLines(newRoot / "references.jsonl")
@@ -117,10 +124,11 @@ def comparisonMetrics(values, protocol):
                 "delta": delta(first["points"]["successRates"][tolerance], second["points"]["successRates"][tolerance])}}
 
 
-def compareConfigurations(baselineEvaluationDir, candidateEvaluationDir, outputDir):
+def compareConfigurations(baselineEvaluationDir, candidateEvaluationDir, outputDir, *, comparisonMode="controlled"):
     first, second = Path(baselineEvaluationDir).resolve(), Path(candidateEvaluationDir).resolve()
     output = validateResearchOutput(outputDir, [first, second])
-    baseline, candidate, oldSeal, newSeal, values = validateComparison(first, second)
+    baseline, candidate, oldSeal, newSeal, values = validateComparison(first, second, comparisonMode=comparisonMode)
+    models = comparisonModels(baseline["training"], [item["run"] for item in candidate["components"]])
     metrics = comparisonMetrics(values, candidate["protocol"])
     output.mkdir(parents=True)
     (output / "evidence").mkdir()
@@ -139,10 +147,11 @@ def compareConfigurations(baselineEvaluationDir, candidateEvaluationDir, outputD
         "baselineContractId": oldSeal["contractId"], "candidateContractId": newSeal["contractId"],
         "baselineEvaluationSha256": hashFile(first / "evaluation.json"),
         "candidateEvaluationSha256": hashFile(second / "evaluation.json"),
-        "configurationChanges": ["detectorPartition", "publicCurriculumExposure", "taskEligibleTrainingCohorts"],
+        "comparisonMode": comparisonMode, "modelVariants": models,
+        "configurationChanges": ["detectorPartition", "publicCurriculumExposure", "taskEligibleTrainingCohorts", *modelChanges(models)],
         "singleSeed": candidate["components"][0]["run"]["configuration"]["seed"]}
     try:
-        archived = validateComparison(output / "evidence/baseline", output / "evidence/candidate")
+        archived = validateComparison(output / "evidence/baseline", output / "evidence/candidate", comparisonMode=comparisonMode)
         if oldSeal != archived[2] or newSeal != archived[3] or metrics != comparisonMetrics(archived[-1], candidate["protocol"]):
             raise ValueError("Comparison inputs changed while archiving evidence.")
         if verifyEvaluation(first)[1] != oldSeal or verifyEvaluation(second)[1] != newSeal:

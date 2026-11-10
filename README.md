@@ -1,5 +1,9 @@
 # Futsal
 
+All training tasks support YOLO26 sizes `n/s/m/l/x` through YAML or `--modelSize`.
+See [model sizes and variant comparisons](docs/modelSizes.md) for independent
+component selection, matching official weights and explicit comparison modes.
+
 The court detector supports an independently generated synthetic training supplement.
 Use the same training profile with or without `--syntheticDir`; see
 [generation, training and comparison](docs/syntheticCourt.md).

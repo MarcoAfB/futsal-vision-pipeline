@@ -11,6 +11,11 @@ the resulting detector. Stage scores describe different ontologies; they do not
 rank configurations or establish that curriculum learning improves accuracy.
 Scientific training and the resource pilot use registered real data only.
 
+YOLO26n is the default profile. All sizes `n/s/m/l/x` are supported through
+`modelSize` in YAML or `--modelSize` in both training and the server launcher.
+Use the matching official weights and a matching resource pilot; see
+[model sizes](modelSizes.md). Reuse existing work/data paths for subsequent runs.
+
 ## Files and storage
 
 Keep a real, clean Git checkout for code snapshots. Transfer code independently

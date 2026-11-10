@@ -7,7 +7,9 @@ import cv2
 from futsal.datasets.datasetFiles import readJson, writeJson
 from futsal.evaluation.configurationComparison import validateComparison
 from futsal.evaluation.evaluationData import validateResearchOutput
+from futsal.evaluation.modelComparison import comparisonModels
 from futsal.inventory.catalog import hashFile
+from futsal.reporting.modelComparisonReport import modelComparisonMarkdown
 from futsal.reporting.reportExamples import examplePanel
 from futsal.reporting.researchExamples import fixedExamples, selectExamples
 from futsal.reporting.researchReport import (
@@ -75,7 +77,11 @@ def comparisonMarkdown(root, state):
              "Frames are not independent experimental replicates. No inference speed/memory benchmark is included.", ""]
     if state["status"] != "completed":
         return "\n".join(lines + [f"Integrity failure: {state.get('integrityError', 'See evaluation.json')}.", ""])
-    baseline, candidate, _, _, values = validateComparison(root / "evidence/baseline", root / "evidence/candidate")
+    mode = state.get("comparisonMode", "controlled")
+    baseline, candidate, _, _, values = validateComparison(root / "evidence/baseline", root / "evidence/candidate",
+                                                          comparisonMode=mode)
+    models = comparisonModels(baseline["training"], [item["run"] for item in candidate["components"]])
+    lines += modelComparisonMarkdown(mode, models)
     metrics = readJson(root / "evidence/comparisonMetrics.json")
     tables = root / "tables"
     tables.mkdir()

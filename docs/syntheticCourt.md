@@ -98,6 +98,14 @@ and results by original match. Unsupported lowerCornerSideB remains N/A. Epochs,
 batches, actual optimizer updates and elapsed training time are included: matching
 epoch limits does not equalize computation. One seed establishes no significance.
 
+These are the default `controlled` comparison rules. All sizes `n/s/m/l/x` work
+with real-only or supplemented court training using `--modelSize` and matching
+official `--weights`. Explicit `--comparisonMode modelVariants` also permits sizes
+and corresponding initializations to differ between the two evaluations. Other
+controls remain enforced. Reports then identify the model-size difference and do
+not attribute the observed difference solely to synthetic supplementation.
+See [model-size selection and comparison](modelSizes.md).
+
 The existing evaluateConfiguration accepts either court run with the same real-only
 objects run and real dataset, preserving the 539 common canonical validation records
 and native composition/matching rules. Its evidence archives synthetic provenance.

@@ -10,7 +10,7 @@ the profiles and real-only workflow below remain the defaults.
 
 The separated detection recipe defines detailedObjects (ball and four athlete
 classes) and courtPoints (twenty detection classes). Each model starts independently
-from the official YOLO26n checkpoint. Court landmarks retain the existing 1/64 by
+from the official checkpoint of its selected YOLO26 size (default `n`). Court landmarks retain the existing 1/64 by
 1/36 boxes and native-point references. Only registered real own data are selected.
 
 Projection recomputes eligibility from native annotations, keeping the canonical
@@ -54,6 +54,8 @@ corruption, another parent, missing/extra files or insufficient space fail expli
 Use the existing train CLI twice, sequentially, with the same official YOLO26n
 checkpoint and sidecar. `configs/training/detailedObjects.yaml` and
 `configs/training/courtPoints.yaml` each contain exactly one training stage.
+These are the default examples. Each run can independently select `n/s/m/l/x`
+through YAML or `--modelSize`, with matching `--weights`; see [model sizes](modelSizes.md).
 The initial protocol is seed 42, image size 960, physical batch 2/nbs 64, FP32 SGD,
 LR 0.001, momentum 0.937, weight decay 0.0005, warmup 3, linear final LR fraction 0.01,
 100 maximum epochs and patience 20. Workers 2, cache and all augmentations disabled.
@@ -74,6 +76,12 @@ verifies both completed scientific single-stage runs, their official initializat
 code/configuration compatibility, full selections and parent dataset lineage.
 `--config` selects the frozen research validation protocol; `--workRoot` controls
 the isolated runtime copies. Requested GPU failure never falls back to CPU.
+
+Object and court sizes may differ, for example objects `s` with court `m`.
+Each component must use its own corresponding official initialization and its
+trained checkpoint must match the recorded scale. Components of the same scale
+must share official initialization. The other shared training parameters, seed,
+device, epoch budget and code requirements still apply, including equal batch.
 
 Both models see the same canonical validation images (539 real records common to
 the three views). Outputs are mapped by class name, stably ordered by confidence
@@ -98,6 +106,10 @@ verified. A user-reported completion is distinct from locally verified artifacts
 --candidateEvaluationDir <jointEvaluation> --outputDir <newComparison>` compares
 only completed scientific evaluations with identical reference contract, canonical
 references/record order, protocol, seed, model scale, resolution and precision.
+This is the default `--comparisonMode controlled`. To compare different sizes,
+explicitly use `--comparisonMode modelVariants`; only model size and its official
+initialization may additionally differ. Both modes check every candidate component.
+The report records each size/checkpoint and identifies changes in model capacity.
 Wrong/missing input, unsupported support changes and corrupted seals are refused.
 It reads sealed metrics/native masks without importing a model or running inference.
 

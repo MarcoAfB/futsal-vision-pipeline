@@ -9,11 +9,13 @@ from futsal.evaluation.configurationRun import evaluateConfiguration
 from futsal.evaluation.courtComparison import compareCourtTraining
 from futsal.evaluation.evaluationRun import evaluateRun, sealEvaluation
 from futsal.reporting.researchReport import renderReport, verifyEvaluation
+from futsal.training.modelWeights import prepareWeights
 from futsal.training.trainingRun import runTraining
 
 
+@pytest.mark.parametrize("comparisonMode,mixedSize", [("controlled", "n"), ("modelVariants", "s")])
 def testMixedRunSupportsJointValidationSealedComparisonAndPortableReports(
-    configurationEvaluation, syntheticSource, tmp_path, monkeypatch
+    configurationEvaluation, syntheticSource, tmp_path, monkeypatch, comparisonMode, mixedSize
 ):
     import futsal.training.trainingRun as trainingModule
 
@@ -38,9 +40,15 @@ def testMixedRunSupportsJointValidationSealedComparisonAndPortableReports(
     weights = tmp_path / "initial/yolo26n.pt"
     courtRuns = []
     for name, source in (("real", None), ("mixed", syntheticSource)):
+        size = "n" if source is None else mixedSize
+        selectedWeights = weights
+        if size != "n":
+            prepareWeights(size, tmp_path / "selectedWeights")
+            selectedWeights = tmp_path / "selectedWeights" / f"yolo26{size}.pt"
         runDir = tmp_path / name
         run = runTraining(
-            data, configPath, weights, runDir, syntheticDir=source, progress=lambda message: None
+            data, configPath, selectedWeights, runDir, modelSize=size,
+            syntheticDir=source, progress=lambda message: None
         )
         assert run["status"] == "completed", run.get("error")
         courtRuns.append(runDir)
@@ -84,8 +92,15 @@ def testMixedRunSupportsJointValidationSealedComparisonAndPortableReports(
         assert result["status"] == "completed", result.get("error")
         evaluations.append(output)
     output = tmp_path / "reports/comparison"
-    state = compareCourtTraining(*evaluations, output)
+    if mixedSize != "n":
+        with pytest.raises(ValueError, match="same model scale"):
+            compareCourtTraining(*evaluations, tmp_path / "controlledRejected")
+    state = compareCourtTraining(*evaluations, output, comparisonMode=comparisonMode)
     assert verifyEvaluation(output)[0] == state
+    assert state["modelVariants"]["candidate"][0]["modelSize"] == mixedSize
+    if comparisonMode == "controlled":
+        del state["comparisonMode"]
+        sealEvaluation(output, state)
     unsupported = [
         r
         for r in readJson(output / "evidence/comparisonMetrics.json")["points"]
@@ -94,7 +109,10 @@ def testMixedRunSupportsJointValidationSealedComparisonAndPortableReports(
     assert unsupported[0]["baseline"] is None and unsupported[0]["delta"] is None
     monkeypatch.setitem(sys.modules, "torch", None)
     monkeypatch.setitem(sys.modules, "ultralytics", None)
-    assert "N/A" in renderReport(output).read_text()
+    text = renderReport(output).read_text()
+    assert "N/A" in text and f"Comparison mode: **{comparisonMode}**" in text
+    if mixedSize != "n":
+        assert "yolo26s" in text and "Only synthetic training membership changes" not in text
     assert "courtTrainingComparison" in (output.parent / "index.md").read_text()
     regenerated = tmp_path / "regenerated"
     assert renderReport(output, regenerated).is_file()
@@ -116,7 +134,7 @@ def testMixedRunSupportsJointValidationSealedComparisonAndPortableReports(
     baseline["trainingRunSha256"] = hashFile(evaluations[0] / "evidence/trainingRun.json")
     sealEvaluation(evaluations[0], baseline)
     with pytest.raises(ValueError, match="parameters"):
-        compareCourtTraining(*evaluations, tmp_path / "incompatible")
+        compareCourtTraining(*evaluations, tmp_path / "incompatible", comparisonMode=comparisonMode)
     run = readJson(courtRuns[1] / "run.json")
     run["syntheticIntegrityAfterRun"] = False
     writeJson(courtRuns[1] / "run.json", run)

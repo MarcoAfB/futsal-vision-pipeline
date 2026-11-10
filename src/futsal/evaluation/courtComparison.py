@@ -6,6 +6,12 @@ from futsal.datasets.syntheticCourt import validateSyntheticSnapshot
 from futsal.evaluation.configurationComparison import comparisonMetrics
 from futsal.evaluation.evaluationData import readJsonLines, validateResearchOutput
 from futsal.evaluation.evaluationRun import sealEvaluation
+from futsal.evaluation.modelComparison import (
+    comparisonModels,
+    modelChanges,
+    validateComparisonMode,
+    validateModelComparison,
+)
 from futsal.inventory.catalog import hashFile
 from futsal.reporting.researchReport import verifyEvaluation
 from futsal.training.trainingRun import utcNow
@@ -78,7 +84,8 @@ def courtEvaluation(root):
     return state, seal, stage, task, values
 
 
-def courtComparisonInputs(baselineDir, candidateDir):
+def courtComparisonInputs(baselineDir, candidateDir, *, comparisonMode="controlled"):
+    validateComparisonMode(comparisonMode)
     before, after = courtEvaluation(Path(baselineDir)), courtEvaluation(Path(candidateDir))
     baseline, candidate = before[0], after[0]
     first, second = baseline["training"], candidate["training"]
@@ -88,10 +95,11 @@ def courtComparisonInputs(baselineDir, candidateDir):
         or newConfig["sourcePolicy"] != "realWithSyntheticCourt"
     ):
         raise ValueError("Compare real-only training against real plus synthetic court training.")
+    validateModelComparison(first, second, comparisonMode)
+    excluded = {"sourcePolicy", "modelSize"}
     if (
-        {k: v for k, v in oldConfig.items() if k != "sourcePolicy"}
-        != {k: v for k, v in newConfig.items() if k != "sourcePolicy"}
-        or first["initialWeights"] != second["initialWeights"]
+        {k: v for k, v in oldConfig.items() if k not in excluded}
+        != {k: v for k, v in newConfig.items() if k not in excluded}
         or first["code"]["files"] != second["code"]["files"]
     ):
         raise ValueError(
@@ -137,10 +145,11 @@ def courtComparisonInputs(baselineDir, candidateDir):
     return before, after
 
 
-def compareCourtTraining(baselineEvaluationDir, candidateEvaluationDir, outputDir):
+def compareCourtTraining(baselineEvaluationDir, candidateEvaluationDir, outputDir, *, comparisonMode="controlled"):
     first, second = Path(baselineEvaluationDir).resolve(), Path(candidateEvaluationDir).resolve()
     output = validateResearchOutput(outputDir, [first, second])
-    before, after = courtComparisonInputs(first, second)
+    before, after = courtComparisonInputs(first, second, comparisonMode=comparisonMode)
+    models = comparisonModels(before[0]["training"], [after[0]["training"]])
     values = [before[4], after[4]]
     metrics = comparisonMetrics(values, before[0]["protocol"])
     metrics["byMatch"] = {
@@ -173,6 +182,9 @@ def compareCourtTraining(baselineEvaluationDir, candidateEvaluationDir, outputDi
         "selection": "fullValidation",
         "testEvaluated": False,
         "singleSeed": before[0]["training"]["configuration"]["seed"],
+        "comparisonMode": comparisonMode,
+        "modelVariants": models,
+        "configurationChanges": ["syntheticTrainingMembership", *modelChanges(models)],
         "baselineContractId": before[1]["contractId"],
         "candidateContractId": after[1]["contractId"],
         "classes": before[2]["classes"],
@@ -182,7 +194,7 @@ def compareCourtTraining(baselineEvaluationDir, candidateEvaluationDir, outputDi
             v[0]["training"]["stages"][0]["results"]["training"] for v in (before, after)
         ],
     }
-    archived = courtComparisonInputs(output / "evidence/baseline", output / "evidence/candidate")
+    archived = courtComparisonInputs(output / "evidence/baseline", output / "evidence/candidate", comparisonMode=comparisonMode)
     if [v[1] for v in archived] != [before[1], after[1]] or [
         verifyEvaluation(p)[1] for p in (first, second)
     ] != [before[1], after[1]]:

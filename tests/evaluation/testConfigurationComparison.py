@@ -1,6 +1,6 @@
 import pytest
 
-from futsal.datasets.datasetFiles import hashJson, readJson
+from futsal.datasets.datasetFiles import hashJson, readJson, writeJson
 from futsal.evaluation.configurationComparison import (
     compareConfigurations,
     delta,
@@ -74,3 +74,51 @@ def testComparisonRegeneratesFromSealedEvidenceWithoutModelPackages(comparisonEv
     regenerated = renderComparisonReport(output, tmp_path / "regenerated")
     assert regenerated.is_file() and hashFile(output / "evaluationContract.json") == before
     assert list((tmp_path / "regenerated/examples").glob("*Baseline.png"))
+
+
+@pytest.mark.parametrize("configurationEvaluation", [("n", "s")], indirect=True)
+def testControlledComparisonChecksCourtScaleAsWellAsObjects(comparisonEvaluations, tmp_path):
+    baseline, candidate = comparisonEvaluations
+    state = readJson(candidate / "evaluation.json")
+    court = state["components"][1]["run"]
+    with pytest.raises(ValueError, match="same model scale"):
+        compareConfigurations(baseline, candidate, tmp_path / "controlled")
+    output = tmp_path / "variants"
+    result = compareConfigurations(baseline, candidate, output, comparisonMode="modelVariants")
+    assert result["status"] == "completed"
+    assert result["comparisonMode"] == "modelVariants"
+    assert "modelSize" in result["configurationChanges"]
+    assert [item["modelSize"] for item in result["modelVariants"]["candidate"]] == ["n", "s"]
+    court["configuration"]["seed"] += 1
+    writeJson(candidate / "evidence/components/courtPoints/run.json", court)
+    sealEvaluation(candidate, state)
+    with pytest.raises(ValueError, match="same seed"):
+        compareConfigurations(baseline, candidate, tmp_path / "seedMismatch", comparisonMode="modelVariants")
+
+
+@pytest.mark.reportingIntegration
+@pytest.mark.parametrize("mode,configurationEvaluation", [
+    ("controlled", ("n", "n")), ("modelVariants", ("n", "s")),
+], indirect=["configurationEvaluation"])
+def testComparisonReportRestoresArchivedMode(comparisonEvaluations, tmp_path, monkeypatch, mode):
+    import sys
+
+    from futsal.reporting.researchReport import renderReport
+
+    baseline, candidate = comparisonEvaluations
+    output = tmp_path / "comparison"
+    result = compareConfigurations(baseline, candidate, output, comparisonMode=mode)
+    if mode == "controlled":
+        for key in ("comparisonMode", "modelVariants", "configurationChanges"):
+            del result[key]
+        sealEvaluation(output, result)
+    before = hashFile(output / "evaluationContract.json")
+    monkeypatch.setitem(sys.modules, "torch", None)
+    monkeypatch.setitem(sys.modules, "ultralytics", None)
+    text = renderReport(output).read_text(encoding="utf-8")
+    assert f"Comparison mode: **{mode}**" in text
+    assert "yolo26n" in text
+    if mode == "modelVariants":
+        assert "yolo26s" in text and "do not isolate the effect" in text
+    assert renderReport(output, tmp_path / "regenerated").is_file()
+    assert hashFile(output / "evaluationContract.json") == before

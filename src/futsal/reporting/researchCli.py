@@ -5,12 +5,16 @@ from futsal.datasets.datasetFiles import readJson, writeJson
 
 
 def addResearchCommands(commands):
+    from futsal.evaluation.modelComparison import comparisonModes
+
     courtComparison = commands.add_parser("compareCourtTraining", help="Compare real-only and supplemented court training.")
     for name in ("baselineEvaluationDir", "candidateEvaluationDir", "outputDir"):
         courtComparison.add_argument(f"--{name}", type=Path, required=True)
     comparison = commands.add_parser("compareConfigurations", help="Compare sealed scientific evaluations without inference.")
     for name in ("baselineEvaluationDir", "candidateEvaluationDir", "outputDir"):
         comparison.add_argument(f"--{name}", type=Path, required=True)
+    for command in (courtComparison, comparison):
+        command.add_argument("--comparisonMode", choices=comparisonModes, default="controlled")
     configuration = commands.add_parser("evaluateConfiguration", help="Evaluate independent object/court checkpoints jointly.")
     for name in ("objectsRunDir", "courtRunDir", "datasetDir", "referenceDatasetDir", "outputDir"):
         configuration.add_argument(f"--{name}", type=Path, required=True)
@@ -39,14 +43,16 @@ def handleResearchCommand(arguments):
     if arguments.command == "compareCourtTraining":
         from futsal.evaluation.courtComparison import compareCourtTraining
 
-        result = compareCourtTraining(arguments.baselineEvaluationDir, arguments.candidateEvaluationDir, arguments.outputDir)
+        result = compareCourtTraining(arguments.baselineEvaluationDir, arguments.candidateEvaluationDir, arguments.outputDir,
+                                      comparisonMode=arguments.comparisonMode)
         path = renderReport(arguments.outputDir)
         print(f"Court training comparison: {result['status']}; report: {path}")
         return 0 if result["status"] == "completed" else 1
     if arguments.command == "compareConfigurations":
         from futsal.evaluation.configurationComparison import compareConfigurations
 
-        result = compareConfigurations(arguments.baselineEvaluationDir, arguments.candidateEvaluationDir, arguments.outputDir)
+        result = compareConfigurations(arguments.baselineEvaluationDir, arguments.candidateEvaluationDir, arguments.outputDir,
+                                       comparisonMode=arguments.comparisonMode)
         path = renderReport(arguments.outputDir)
         print(f"Comparison: {result['status']}; report: {path}")
         return 0 if result["status"] == "completed" else 1

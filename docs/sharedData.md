@@ -91,6 +91,11 @@ Joint detailed-object/court evaluation can reuse an existing legacy curriculum
 as `--referenceDatasetDir`; its images are read through registered asset hashes.
 The generic/player/ball task profiles do not add new joint-comparison ontologies.
 
+Every task profile accepts `n/s/m/l/x` through YAML or `--modelSize`; views and
+media bindings are reused across sizes. Object/court joint evaluation permits
+independent component scales while retaining its other protocol checks. See
+[model sizes and comparison modes](modelSizes.md).
+
 The native reader uses view targets and preserves native transforms, batching and
 metrics. It carries record IDs through batches, so different logical samples
 sharing bytes remain different samples. Source-adjacent caches are neither created

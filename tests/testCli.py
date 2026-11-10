@@ -18,3 +18,19 @@ def testTrainForwardsModelSizeOverride(monkeypatch, tmp_path):
     assert main(["train", "--datasetDir", str(tmp_path / "data"), "--weights", "yolo26s.pt",
                  "--modelSize", "s", "--outputDir", str(tmp_path / "run")]) == 0
     assert calls[0]["modelSize"] == "s"
+
+
+@pytest.mark.parametrize("command", ["compareConfigurations", "compareCourtTraining"])
+@pytest.mark.parametrize("mode", [None, "modelVariants"])
+def testComparisonCommandsForwardMode(monkeypatch, tmp_path, command, mode):
+    calls = []
+    module = "configurationComparison" if command == "compareConfigurations" else "courtComparison"
+    monkeypatch.setattr(f"futsal.evaluation.{module}.{command}",
+                        lambda *args, **kwargs: calls.append(kwargs) or {"status": "completed"})
+    monkeypatch.setattr("futsal.reporting.researchReport.renderReport", lambda *args: "report.md")
+    arguments = [command, "--baselineEvaluationDir", "before", "--candidateEvaluationDir", "after",
+                 "--outputDir", str(tmp_path / "comparison")]
+    if mode is not None:
+        arguments += ["--comparisonMode", mode]
+    assert main(arguments) == 0
+    assert calls[0]["comparisonMode"] == (mode or "controlled")

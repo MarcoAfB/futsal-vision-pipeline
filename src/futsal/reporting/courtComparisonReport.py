@@ -4,6 +4,8 @@ from pathlib import Path
 from futsal.datasets.datasetFiles import readJson, writeJson
 from futsal.evaluation.courtComparison import courtComparisonInputs
 from futsal.evaluation.evaluationData import validateResearchOutput
+from futsal.evaluation.modelComparison import comparisonModels, modelChanges
+from futsal.reporting.modelComparisonReport import modelComparisonMarkdown
 from futsal.reporting.researchReport import (
     archiveRenderer,
     markdownTable,
@@ -19,7 +21,10 @@ def renderCourtComparison(evaluationDir, outputDir=None):
     state, seal = verifyEvaluation(source)
     if state.get("kind") != "courtTrainingComparison" or state["status"] != "completed":
         raise ValueError("A completed court training comparison is required.")
-    courtComparisonInputs(source / "evidence/baseline", source / "evidence/candidate")
+    mode = state.get("comparisonMode", "controlled")
+    before, after = courtComparisonInputs(source / "evidence/baseline", source / "evidence/candidate",
+                                          comparisonMode=mode)
+    models = comparisonModels(before[0]["training"], [after[0]["training"]])
     root = source if outputDir is None else validateResearchOutput(outputDir, [source])
     if (root / "report.md").exists():
         raise ValueError("Report output must be new.")
@@ -55,9 +60,12 @@ def renderCourtComparison(evaluationDir, outputDir=None):
     lines = [
         "# Court training: real data and synthetic supplementation",
         "",
-        "The same twenty-class detector and training routine are used in both executions. "
-        "Only synthetic training membership changes. Both use identical real validation images.",
+        ("The twenty-class detector task and training routine are shared. Model size and synthetic training "
+         "membership change. Both use identical real validation images." if modelChanges(models) else
+         "The same twenty-class detector and training routine are used in both executions. "
+         "Only synthetic training membership changes. Both use identical real validation images."),
         "",
+        *modelComparisonMarkdown(mode, models),
         f"Single seed: {state['singleSeed']}. Test evaluated: False.",
         "",
         "The same epoch limit does not equalize optimizer updates or training time. "
