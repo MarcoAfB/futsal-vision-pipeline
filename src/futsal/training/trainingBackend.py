@@ -8,6 +8,7 @@ from pathlib import Path
 from futsal.datasets.datasetFiles import verifyEvidence, writeJson
 from futsal.inventory.catalog import hashFile, readYaml
 from futsal.training.checkpointTransfer import classificationKeys, loadAudited
+from futsal.training.memoryRecovery import requireFixedBatch
 from futsal.training.trainingConfig import stageParameters
 
 
@@ -79,7 +80,7 @@ def validationMetrics(metrics, names, support, purpose="technicalSmoke"):
             "aggregate": aggregate, "perClass": perClass}
 
 
-def trainStage(config, task, stage, inputWeights, stageDir, runDir, runtimeEvidence):
+def trainStage(config, task, stage, inputWeights, stageDir, runDir, runtimeEvidence, *, batchRecovery="native"):
     from ultralytics.utils import LOGGER
 
     logDir = Path(runDir) / "logs"
@@ -87,13 +88,14 @@ def trainStage(config, task, stage, inputWeights, stageDir, runDir, runtimeEvide
     handler = logging.FileHandler(logDir / f"{stage['taskId']}.log", encoding="utf-8")
     LOGGER.addHandler(handler)
     try:
-        return trainNativeStage(config, task, stage, inputWeights, stageDir, runDir, runtimeEvidence)
+        return trainNativeStage(config, task, stage, inputWeights, stageDir, runDir, runtimeEvidence,
+                                batchRecovery=batchRecovery)
     finally:
         LOGGER.removeHandler(handler)
         handler.close()
 
 
-def trainNativeStage(config, task, stage, inputWeights, stageDir, runDir, runtimeEvidence):
+def trainNativeStage(config, task, stage, inputWeights, stageDir, runDir, runtimeEvidence, *, batchRecovery="native"):
     import torch
     from ultralytics.models.yolo.detect import DetectionTrainer
     from ultralytics.nn.tasks import load_checkpoint
@@ -102,6 +104,11 @@ def trainNativeStage(config, task, stage, inputWeights, stageDir, runDir, runtim
     stageDir, runDir = Path(stageDir), Path(runDir)
 
     class AuditedDetectionTrainer(DetectionTrainer):
+        def _build_train_pipeline(self):
+            if batchRecovery == "fixed":
+                requireFixedBatch(self.batch_size, parameters["batch"], getattr(self, "_oom_retries", 0))
+            return super()._build_train_pipeline()
+
         def build_dataset(self, img_path, mode="train", batch=None):
             from ultralytics.utils.torch_utils import unwrap_model
 
@@ -217,6 +224,7 @@ def trainNativeStage(config, task, stage, inputWeights, stageDir, runDir, runtim
         torch.cuda.reset_peak_memory_stats(trainer.device)
     started = time.perf_counter()
     trainer.train()
+    writeJson(stageDir / "effectiveArguments.json", {**vars(trainer.args), "batch": trainer.batch_size})
     elapsed = time.perf_counter() - started
     verifyEvidence(runDir, runtimeEvidence)
     names = task["classes"]
@@ -228,6 +236,8 @@ def trainNativeStage(config, task, stage, inputWeights, stageDir, runDir, runtim
         raise ValueError("Validation did not process the exact selected annotations.")
     result = validationMetrics(metrics, names, task["validationSupport"], config["purpose"])
     result["training"] = {"requestedEpochs": stage["epochs"], "completedEpochs": len(history),
+                          "requestedBatch": parameters["batch"], "effectiveBatch": trainer.batch_size,
+                          "batchRecovery": batchRecovery,
                           **trainingCounts,
                           "bestEpoch": max(row["epoch"] for row in history if row["fitness"] == history[-1]["bestFitness"]),
                           "selectionCriterion": "nativeValidationMap50To95", "elapsedSeconds": elapsed,

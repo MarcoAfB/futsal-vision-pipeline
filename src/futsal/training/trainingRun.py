@@ -17,9 +17,14 @@ from futsal.datasets.datasetVerify import verifyDataset
 from futsal.inventory.catalog import hashFile
 from futsal.inventory.yoloInventory import scanFiles
 from futsal.reporting.report import atomicWrite
+from futsal.training.memoryRecovery import errorCauses, isMemoryFailure
 from futsal.training.modelWeights import verifyWeights
 from futsal.training.trainingBackend import initializeBackend, trainStage
-from futsal.training.trainingConfig import loadTrainingConfig, resolveTrainingConfig
+from futsal.training.trainingConfig import (
+    loadTrainingConfig,
+    resolveTrainingConfig,
+    stageParameters,
+)
 from futsal.training.trainingContinuation import continueCompletedStages
 from futsal.training.trainingData import copyRuntimeData, selectTrainingData
 from futsal.training.trainingEnvironment import inspectEnvironment
@@ -85,13 +90,15 @@ def executeStages(config, selection, initialWeights, runDir, run, evidence, prog
         taskId = stage["taskId"]
         stageDir = runDir / "stages" / f"stage{index:02d}{taskId[0].upper()}{taskId[1:]}"
         state = {"taskId": taskId, "status": "running", "startedAt": utcNow(),
+                 "requestedBatch": stageParameters(config, stage)["batch"],
                  "directory": stageDir.relative_to(runDir).as_posix(),
                  "inputWeights": fileEvidence(inputWeights, runDir)}
         run["stages"].append(state)
         saveRun(runDir, run)
         progress(f"Training stage {index}/{len(config['stages'])}: {taskId}...")
+        options = {"batchRecovery": "fixed"} if run.get("batchRecovery") == "fixed" else {}
         result = trainStage(config, selection["tasks"][taskId], stage, inputWeights,
-                            stageDir, runDir, evidence)
+                            stageDir, runDir, evidence, **options)
         if hashFile(inputWeights) != state["inputWeights"]["sha256"]:
             raise ValueError("Input checkpoint changed during training.")
         verifyEvidence(runDir, evidence)
@@ -101,7 +108,14 @@ def executeStages(config, selection, initialWeights, runDir, run, evidence, prog
 
 
 def runTraining(datasetDir, configPath, weightsPath, outputDir, progress=print, *, seed=None,
-                modelSize=None, continueFrom=None, syntheticDir=None, mediaStoreDir=None):
+                modelSize=None, continueFrom=None, syntheticDir=None, mediaStoreDir=None,
+                batchRecovery="native", memoryRetryFrom=None):
+    if batchRecovery not in {"native", "fixed"}:
+        raise ValueError("batchRecovery must be native or fixed.")
+    if continueFrom is not None and memoryRetryFrom is not None:
+        raise ValueError("continueFrom and memoryRetryFrom are mutually exclusive.")
+    if memoryRetryFrom is not None and batchRecovery != "fixed":
+        raise ValueError("Memory retry requires fixed batch recovery.")
     datasetDir, configPath, weightsPath = (Path(path).resolve() for path in
                                            (datasetDir, configPath, weightsPath))
     projectRoot = Path(futsal.__file__).resolve().parents[2]
@@ -122,6 +136,8 @@ def runTraining(datasetDir, configPath, weightsPath, outputDir, progress=print, 
     validateNewOutput(runDir, projectRoot / "data" / "raw")
     if continueFrom is not None:
         validateNewOutput(runDir, continueFrom, [continueFrom])
+    if memoryRetryFrom is not None:
+        validateNewOutput(runDir, memoryRetryFrom, [memoryRetryFrom])
     sourceConfig = loadTrainingConfig(configPath, readJson(datasetDir / "plan.json")["recipe"])
     config = resolveTrainingConfig(sourceConfig, seed=seed, modelSize=modelSize)
     if syntheticDir is not None:
@@ -135,7 +151,8 @@ def runTraining(datasetDir, configPath, weightsPath, outputDir, progress=print, 
     runDir.mkdir(parents=True, exist_ok=False)
     run = {"schemaVersion": 1, "purpose": config["purpose"], "status": "running",
            "startedAt": utcNow(), "configuration": config, "initialWeights": weights,
-           "datasetDirectory": str(datasetDir), "stages": [], "testEvaluated": False}
+           "datasetDirectory": str(datasetDir), "stages": [], "testEvaluated": False,
+           "batchRecovery": batchRecovery}
     run["configurationId"] = hashJson(config)
     run["configurationOverrides"] = {key: value for key, value in
                                      (("seed", seed), ("modelSize", modelSize)) if value is not None}
@@ -196,8 +213,9 @@ def runTraining(datasetDir, configPath, weightsPath, outputDir, progress=print, 
         else:
             evidence = copyRuntimeData(datasetDir, runDir, selection, syntheticDir=syntheticDir)
         run["selectionSha256"] = hashFile(runDir / "selection.json")
-        if continueFrom is not None:
-            continueCompletedStages(continueFrom, runDir, run)
+        if continueFrom is not None or memoryRetryFrom is not None:
+            continueCompletedStages(continueFrom or memoryRetryFrom, runDir, run,
+                                    memoryRetry=memoryRetryFrom is not None)
             run["inputEvidence"] = [fileEvidence(path, runDir) for path in sorted(inputs.iterdir())]
         saveRun(runDir, run)
         initializeBackend(runDir / "backend", config["numThreads"])
@@ -206,7 +224,10 @@ def runTraining(datasetDir, configPath, weightsPath, outputDir, progress=print, 
     except (Exception, KeyboardInterrupt) as error:
         run["status"] = "interrupted" if isinstance(error, KeyboardInterrupt) else "failed"
         run["error"] = {"type": type(error).__name__, "message": str(error)}
+        run["error"]["causes"] = errorCauses(error)
+        run["memoryFailure"] = isMemoryFailure(run["error"]["causes"])
         (runDir / "failure.txt").write_text(traceback.format_exc(), encoding="utf-8")
+        run["failureEvidence"] = fileEvidence(runDir / "failure.txt", runDir)
         if run["stages"] and run["stages"][-1]["status"] == "running":
             run["stages"][-1].update(status=run["status"], endedAt=utcNow())
         saveRun(runDir, run)
@@ -245,6 +266,8 @@ def runTraining(datasetDir, configPath, weightsPath, outputDir, progress=print, 
         run["endedAt"] = utcNow()
         run["artifacts"] = [fileEvidence(path, runDir) for folder in ("stages", "logs")
                             for path in sorted((runDir / folder).rglob("*")) if path.is_file()]
+        if "failureEvidence" in run:
+            run["artifacts"].append(run["failureEvidence"])
         saveRun(runDir, run)
         writeJson(runDir / "summary.json", {key: run[key] for key in
                   ("purpose", "status", "startedAt", "endedAt", "testEvaluated")})

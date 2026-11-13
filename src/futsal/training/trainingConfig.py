@@ -56,8 +56,9 @@ def loadTrainingConfig(path, recipe):
         if not scientific and (stage["epochs"] != 1 or "parameters" in stage):
             raise ValueError("The technical smoke requires one epoch per stage.")
         overrides = stage.get("parameters", {})
-        if not isinstance(overrides, dict) or set(overrides) - {"lr0", "patience", "warmup_epochs"}:
-            raise ValueError("Stage parameters may override only lr0, patience and warmup_epochs.")
+        allowed = {"lr0", "patience", "warmup_epochs", "batch"} if scientific else set()
+        if not isinstance(overrides, dict) or set(overrides) - allowed:
+            raise ValueError("Scientific stage parameters may override only lr0, patience, warmup_epochs and batch.")
         validateParameters(stageParameters(data, stage), scientific)
     stageIds = [stage["taskId"] for stage in stages]
     activeIds = [task["taskId"] for task in activeTasks(recipe)]

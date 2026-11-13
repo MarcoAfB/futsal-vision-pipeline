@@ -66,7 +66,10 @@ def main(argv: list[str] | None = None) -> int:
     trainParser.add_argument("--outputDir", type=Path, required=True)
     trainParser.add_argument("--seed", type=int)
     trainParser.add_argument("--modelSize", choices=modelSizes, help="Override the training profile model size.")
-    trainParser.add_argument("--continueFrom", type=Path)
+    continuation = trainParser.add_mutually_exclusive_group()
+    continuation.add_argument("--continueFrom", type=Path)
+    continuation.add_argument("--memoryRetryFrom", type=Path)
+    trainParser.add_argument("--batchRecovery", choices=["native", "fixed"], default="native")
     trainParser.add_argument("--syntheticDir", type=Path, help="Previously generated court training supplement.")
     trainParser.add_argument("--mediaStoreDir", type=Path)
     trainParser.add_argument("--reportRoot", type=Path)
@@ -148,6 +151,7 @@ def main(argv: list[str] | None = None) -> int:
             run = runTraining(arguments.datasetDir, arguments.config, arguments.weights,
                               arguments.outputDir, progress=lambda message: print(message, flush=True),
                               seed=arguments.seed, modelSize=arguments.modelSize, continueFrom=arguments.continueFrom,
+                              memoryRetryFrom=arguments.memoryRetryFrom, batchRecovery=arguments.batchRecovery,
                               syntheticDir=arguments.syntheticDir, mediaStoreDir=arguments.mediaStoreDir)
         except (OSError, ValueError) as error:
             parser.exit(2, f"Training could not start: {error}\n")

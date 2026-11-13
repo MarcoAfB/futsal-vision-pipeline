@@ -211,3 +211,94 @@ def testSizeWeightMismatchFailsBeforeCreatingRun(trainingBundle, localWeights, t
     with pytest.raises(ValueError, match="provenance"):
         runTraining(bundle, configPath, localWeights, output, modelSize="s")
     assert not output.exists()
+
+
+@pytest.mark.parametrize("failedIndex", [0, 1, 2])
+def testMemoryRetryChangesOnlyFailedBatchAndReusesPrefix(objectCurriculumView, localWeights,
+                                                        fakeTraining, tmp_path, monkeypatch, failedIndex):
+    import copy
+
+    import yaml
+
+    from futsal.training.trainingConfig import stageParameters
+
+    view, store, configPath = objectCurriculumView
+    config = yaml.safe_load(configPath.read_text())
+    config.update(device="cpu", evaluationDevice="cpu")
+    configPath.write_text(yaml.safe_dump(config))
+    tasks = [stage["taskId"] for stage in config["stages"]]
+    calls = []
+    failing = True
+
+    def injected(config, task, stage, *args, **kwargs):
+        batch = stageParameters(config, stage)["batch"]
+        calls.append((stage["taskId"], batch))
+        if stage["taskId"] == tasks[failedIndex] and failing:
+            raise RuntimeError("CUDA out of memory. Tried to allocate 1 GiB")
+        result = fakeTraining(config, task, stage, *args)
+        result["training"] = {"requestedBatch": batch, "effectiveBatch": batch}
+        return result
+
+    monkeypatch.setattr("futsal.training.trainingRun.trainStage", injected)
+    previousDir = tmp_path / "batch8"
+    run = runTraining(view, configPath, localWeights, previousDir, mediaStoreDir=store, batchRecovery="fixed")
+    assert run["status"] == "failed" and run["memoryFailure"]
+    for batch in (4, 2, 1):
+        calls.clear()
+        updated = copy.deepcopy(run["configuration"])
+        updated["stages"][failedIndex]["parameters"]["batch"] = batch
+        configPath.write_text(yaml.safe_dump(updated))
+        output = tmp_path / f"batch{batch}"
+        failing = batch != 1
+        oldHash = hashFile(previousDir / "run.json")
+        run = runTraining(view, configPath, localWeights, output, mediaStoreDir=store,
+                          batchRecovery="fixed", memoryRetryFrom=previousDir)
+        assert calls == [(task, batch if index == failedIndex else 8)
+                         for index, task in enumerate(tasks) if index >= failedIndex and (not failing or index == failedIndex)]
+        assert run["continuation"]["completedStageCount"] == failedIndex
+        assert run["continuation"]["previousRunSha256"] == oldHash
+        assert len(run["continuation"]["ancestry"]) == {4: 1, 2: 2, 1: 3}[batch]
+        assert hashFile(previousDir / "run.json") == oldHash
+        assert all(stage["reusedFromRunSha256"] == oldHash for stage in run["stages"][:failedIndex])
+        previousDir = output
+    assert run["status"] == "completed", run.get("error")
+
+
+@pytest.mark.parametrize("mutation", ["seed", "lr", "futureBatch", "completedBatch", "weights", "nonMemory", "code"])
+def testMemoryRetryRejectsUnrelatedChanges(objectCurriculumView, localWeights, fakeTraining,
+                                           tmp_path, monkeypatch, mutation):
+    import yaml
+
+    view, store, configPath = objectCurriculumView
+    config = yaml.safe_load(configPath.read_text())
+    config.update(device="cpu", evaluationDevice="cpu")
+    configPath.write_text(yaml.safe_dump(config))
+
+    def injected(config, task, stage, *args, **kwargs):
+        if stage["taskId"] == "roleObjects":
+            raise RuntimeError("CUDA error: unknown error" if mutation == "nonMemory" else "CUDA out of memory")
+        return fakeTraining(config, task, stage, *args)
+
+    monkeypatch.setattr("futsal.training.trainingRun.trainStage", injected)
+    previousDir = tmp_path / "prior"
+    previous = runTraining(view, configPath, localWeights, previousDir, mediaStoreDir=store, batchRecovery="fixed")
+    config["stages"][1]["parameters"]["batch"] = 4
+    if mutation == "seed":
+        config["seed"] = 43
+    elif mutation == "lr":
+        config["stages"][1]["parameters"]["lr0"] = 0.2
+    elif mutation == "futureBatch":
+        config["stages"][2]["parameters"]["batch"] = 4
+    elif mutation == "completedBatch":
+        config["stages"][0]["parameters"]["batch"] = 4
+    elif mutation == "weights":
+        previous["initialWeights"]["sha256"] = "f" * 64
+    elif mutation == "code":
+        previous["code"]["commit"] = "0" * 40
+    writeJson(previousDir / "run.json", previous)
+    configPath.write_text(yaml.safe_dump(config))
+    monkeypatch.setattr("futsal.training.trainingRun.trainStage", lambda *a, **kw: pytest.fail("Invalid retry trained"))
+    result = runTraining(view, configPath, localWeights, tmp_path / "refused", mediaStoreDir=store,
+                         batchRecovery="fixed", memoryRetryFrom=previousDir)
+    assert result["status"] == "failed"
+    assert result["stages"] == []
