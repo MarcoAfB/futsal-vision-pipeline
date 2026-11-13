@@ -10,6 +10,18 @@ def testVersion(capsys):
     assert capsys.readouterr().out.strip() == "futsal 0.1.0"
 
 
+@pytest.mark.parametrize("status,exitCode", [("completed", 0), ("partial", 1)])
+def testBallTrackingCommandForwardsDeviceAndResume(monkeypatch, tmp_path, status, exitCode):
+    calls = []
+    monkeypatch.setattr("futsal.evaluation.ballTrackingRun.compareBallTrackers",
+                        lambda *args, **kwargs: calls.append((args, kwargs)) or {"status": status})
+    monkeypatch.setattr("futsal.reporting.researchReport.renderReport", lambda *args: "report.md")
+    assert main(["compareBallTrackers", "--runsConfig", "localSettings.ballTracking.yaml",
+                 "--datasetDir", "view", "--mediaStoreDir", "store", "--device", "0",
+                 "--resumeFrom", "previous", "--outputDir", str(tmp_path / "comparison")]) == exitCode
+    assert calls[0][1]["device"] == "0" and str(calls[0][1]["resumeFrom"]) == "previous"
+
+
 def testTrainForwardsModelSizeOverride(monkeypatch, tmp_path):
     calls = []
     monkeypatch.setattr("futsal.training.trainingRun.runTraining",

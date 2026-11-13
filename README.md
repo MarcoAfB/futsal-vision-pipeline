@@ -1,5 +1,10 @@
 # Futsal
 
+Compare completed ball-only models with all six native trackers and detector-only
+baselines using `compareBallTrackers`. The [ball tracking guide](docs/ballTracking.md)
+documents full-validation selection, pinned dependencies, sealed results, retry
+and inference-free report regeneration.
+
 All training tasks support YOLO26 sizes `n/s/m/l/x` through YAML or `--modelSize`.
 See [model sizes and variant comparisons](docs/modelSizes.md) for independent
 component selection, matching official weights and explicit comparison modes.
@@ -154,6 +159,7 @@ src/futsal/
   inventory/
   datasets/
   training/
+  tracking/
   evaluation/
   reporting/
 ```

@@ -1,5 +1,11 @@
 # Package architecture
 
+The `tracking` domain owns ball-tracker configuration, shared validation sequence
+selection, training/checkpoint validation and native tracking workers. Evaluation
+orchestrates isolated comparison conditions and operational temporal metrics;
+reporting renders sealed evidence without a model backend. See
+[ball tracking](ballTracking.md) for the CLI and evidence contracts.
+
 `src` is the source directory; `futsal` is the installable Python package. Hatch
 includes `src/futsal` and its subpackages in the wheel. The package name remains
 stable for `python -m futsal`, the installed `futsal` command and explicit imports.
@@ -17,6 +23,7 @@ importing a subpackage does not eagerly load its workflows or optional backends.
 | `inventory` | Register sources, inspect media and audit reviewed own/public records. | `catalog`, `mediaMetadata`, `inventory`, `ownInventory`, `yoloInventory` |
 | `datasets` | Apply recipes and quarantine, freeze match splits, extract eligible frames, export and verify derived datasets. | `recipes`, `matchSplits`, `datasetSamples`, `datasetPlan`, `datasetExport`, `datasetVerify`, `datasetFiles`, `frameExtraction`, `reviewImages` |
 | `training` | Inspect the environment, prepare weights, select development data, audit transfer and orchestrate native training/continuation. | `trainingEnvironment`, `modelWeights`, `trainingConfig`, `trainingData`, `checkpointTransfer`, `trainingBackend`, `trainingContinuation`, `trainingRun` |
+| `tracking` | Select verified temporal ball sequences, validate model provenance and execute native tracking workers. | `trackingConfig`, `trackingData`, `trackingModels`, `trackingBackend`, `trackingWorker` |
 | `evaluation` | Validate selections and predictions, run archived checkpoints and calculate detection/native-point metrics. | `evaluationData`, `evaluationBackend`, `evaluationMetrics`, `pointMetrics`, `evaluationRun` |
 | `reporting` | Render inventory/research reports, select examples, produce figures and coordinate research CLI processing. | `report`, `researchExamples`, `reportExamples`, `researchFigures`, `researchReport`, `researchCli` |
 

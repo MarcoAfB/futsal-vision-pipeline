@@ -7,6 +7,13 @@ from futsal.datasets.datasetFiles import readJson, writeJson
 def addResearchCommands(commands):
     from futsal.evaluation.modelComparison import comparisonModes
 
+    tracking = commands.add_parser("compareBallTrackers", help="Compare ball-only models and native trackers on own validation.")
+    for name in ("runsConfig", "datasetDir", "mediaStoreDir", "outputDir"):
+        tracking.add_argument(f"--{name}", type=Path, required=True)
+    tracking.add_argument("--config", type=Path, default=Path("configs/evaluation/ballTracking.yaml"))
+    tracking.add_argument("--device", default="cpu")
+    tracking.add_argument("--resumeFrom", type=Path)
+
     courtComparison = commands.add_parser("compareCourtTraining", help="Compare real-only and supplemented court training.")
     for name in ("baselineEvaluationDir", "candidateEvaluationDir", "outputDir"):
         courtComparison.add_argument(f"--{name}", type=Path, required=True)
@@ -39,6 +46,16 @@ def addResearchCommands(commands):
 def handleResearchCommand(arguments):
     from futsal.evaluation.evaluationRun import evaluateRun
     from futsal.reporting.researchReport import renderReport, renderTrainingReport
+
+    if arguments.command == "compareBallTrackers":
+        from futsal.evaluation.ballTrackingRun import compareBallTrackers
+
+        result = compareBallTrackers(arguments.runsConfig, arguments.datasetDir, arguments.mediaStoreDir,
+            arguments.outputDir, configPath=arguments.config, device=arguments.device,
+            resumeFrom=arguments.resumeFrom, progress=lambda message: print(message, flush=True))
+        path = renderReport(arguments.outputDir)
+        print(f"Ball tracking comparison: {result['status']}; report: {path}")
+        return 0 if result["status"] == "completed" else 1
 
     if arguments.command == "compareCourtTraining":
         from futsal.evaluation.courtComparison import compareCourtTraining
