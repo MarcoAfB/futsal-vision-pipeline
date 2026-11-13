@@ -88,7 +88,7 @@ def evaluateStage(datasetDir, runDir, outputDir, workDir, task, references, stag
     writeJson(evidenceDir / "points.json", points)
     selected = selectExamples(fixedIds, detection, points, config)
     examples = archiveExamples(datasetDir, outputDir, selected, references, mediaStoreDir=mediaStoreDir)
-    for name in ("results.csv", "transferAudit.json", "loaderAudit.json", "optimizer.json"):
+    for name in ("results.csv", "transferAudit.json", "loaderAudit.json", "optimizer.json", "exposure.jsonl"):
         source = resolveSourcePath(runDir, f"{stage['directory']}/{name}")
         if source.is_file():
             shutil.copyfile(source, evidenceDir / name)

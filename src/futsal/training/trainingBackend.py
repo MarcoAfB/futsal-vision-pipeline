@@ -10,6 +10,7 @@ from futsal.inventory.catalog import hashFile, readYaml
 from futsal.training.checkpointTransfer import classificationKeys, loadAudited
 from futsal.training.memoryRecovery import requireFixedBatch
 from futsal.training.trainingConfig import stageParameters
+from futsal.training.trainingExposure import EpochExposure, verifyNaturalSampling
 
 
 def initializeBackend(runtimeDir, numThreads):
@@ -102,8 +103,20 @@ def trainNativeStage(config, task, stage, inputWeights, stageDir, runDir, runtim
     from ultralytics.utils.torch_utils import strip_optimizer
 
     stageDir, runDir = Path(stageDir), Path(runDir)
+    mixed = {row["origin"] for row in task["training"]} == {"own", "public"}
+    exposure = EpochExposure(task["training"]) if mixed else None
+    copiedRecords = {(runDir / "runtimeData" / row["imagePath"]).resolve(): row["recordId"] for row in task["training"]}
+    sampling = None
 
     class AuditedDetectionTrainer(DetectionTrainer):
+        def preprocess_batch(self, batch):
+            if exposure is not None:
+                records = batch.get("recordId")
+                if records is None:
+                    records = [copiedRecords[Path(path).resolve()] for path in batch["im_file"]]
+                exposure.observe(records)
+            return super().preprocess_batch(batch)
+
         def _build_train_pipeline(self):
             if batchRecovery == "fixed":
                 requireFixedBatch(self.batch_size, parameters["batch"], getattr(self, "_oom_retries", 0))
@@ -173,10 +186,14 @@ def trainNativeStage(config, task, stage, inputWeights, stageDir, runDir, runtim
         raise ValueError("Backend changed the requested new stage directory.")
 
     def beforeTraining(current):
+        nonlocal sampling
         current.optimizer.register_step_post_hook(afterOptimizerStep)
         verifyEvidence(runDir, runtimeEvidence)
         loaders = {split: verifyLoader(loader.dataset, task, split, runDir) for split, loader in
                    (("training", current.train_loader), ("validation", current.test_loader))}
+        if exposure is not None:
+            sampling = verifyNaturalSampling(current.train_loader, len(task["training"]))
+            loaders["trainingSampling"] = sampling
         writeJson(stageDir / "loaderAudit.json", loaders)
         writeJson(stageDir / "effectiveArguments.json", vars(current.args))
         writeJson(stageDir / "optimizer.json", {"type": type(current.optimizer).__name__,
@@ -199,6 +216,13 @@ def trainNativeStage(config, task, stage, inputWeights, stageDir, runDir, runtim
         if not all(bool(torch.isfinite(value).all()) for model in (current.model, current.ema.ema)
                    for value in model.state_dict().values()):
             raise ValueError("Training produced nonfinite model tensors.")
+        if exposure is not None:
+            with (stageDir / "exposure.jsonl").open("a", encoding="utf-8") as output:
+                output.write(json.dumps(exposure.finish(), allow_nan=False) + "\n")
+
+    def beforeEpoch(current):
+        if exposure is not None:
+            exposure.begin(current.epoch + 1)
 
     def afterOptimizerStep(optimizer, args, kwargs):
         trainingCounts["optimizerUpdates"] += 1
@@ -217,6 +241,7 @@ def trainNativeStage(config, task, stage, inputWeights, stageDir, runDir, runtim
             output.write(json.dumps(row, allow_nan=False) + "\n")
 
     trainer.add_callback("on_pretrain_routine_end", beforeTraining)
+    trainer.add_callback("on_train_epoch_start", beforeEpoch)
     trainer.add_callback("on_train_batch_end", afterBatch)
     trainer.add_callback("on_train_epoch_end", afterEpoch)
     trainer.add_callback("on_fit_epoch_end", afterFitEpoch)
@@ -247,6 +272,8 @@ def trainNativeStage(config, task, stage, inputWeights, stageDir, runDir, runtim
                           "peakCudaReservedBytes": torch.cuda.max_memory_reserved(trainer.device)
                           if trainer.device.type == "cuda" else None}
     result["validationModel"] = "bestCheckpointReloadedAsFp32"
+    if exposure is not None:
+        result["training"]["sampling"] = {**sampling, "verifiedEpochs": exposure.completedEpochs}
     checkpoints = {}
     for kind in ("best", "last"):
         path = Path(getattr(trainer, kind))
