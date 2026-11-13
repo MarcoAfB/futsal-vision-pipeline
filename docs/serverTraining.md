@@ -1,5 +1,9 @@
 # First scientific curriculum on a server
 
+For the public-to-own 2 -> 3 -> 5 object curriculum, use the dedicated
+[object curriculum launcher](objectCurriculum.md). Its new recipe and shared view
+preserve the legacy 2 -> 3 -> 25 workflow described below.
+
 For an existing server workspace and completed curriculum, use the incremental
 [shared data workflow](sharedData.md). It registers existing inputs without image
 copies and supports independent task training. The initial setup below is for

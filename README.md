@@ -1,5 +1,10 @@
 # Futsal
 
+Train a public-to-own object curriculum through 2, 3 and 5 classes, including ball
+at every stage, with independent YOLO26 n/s/m/l/x models. See the
+[object curriculum guide](docs/objectCurriculum.md) for shared-view preparation,
+per-stage batch8/4/2/1 recovery and resumable campaign reports.
+
 Compare completed ball-only models with all six native trackers and detector-only
 baselines using `compareBallTrackers`. The [ball tracking guide](docs/ballTracking.md)
 documents full-validation selection, pinned dependencies, sealed results, retry
