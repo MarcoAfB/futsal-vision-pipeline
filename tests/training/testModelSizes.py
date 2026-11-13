@@ -12,6 +12,8 @@ from futsal.training.trainingConfig import loadTrainingConfig, resolveTrainingCo
 def testEveryTrainingProfileAcceptsEveryModelSize(tmp_path, profile, modelSize):
     config = yaml.safe_load(profile.read_text())
     recipePath = "configs/curriculum.yaml" if profile.stem.startswith("yolo26") else "configs/sharedDetection.yaml"
+    if profile.stem == "yolo26ObjectCurriculum":
+        recipePath = "configs/objectCurriculum.yaml"
     recipe = yaml.safe_load(Path(recipePath).read_text())
     config["modelSize"] = modelSize
     path = tmp_path / "profile.yaml"
