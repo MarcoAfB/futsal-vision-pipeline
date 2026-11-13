@@ -1,5 +1,9 @@
 # Futsal
 
+Train a single-class ball detector on naturally mixed public/own data with the
+[mixed ball workflow](docs/ballMixed.md). It keeps own validation separate and
+audits full shuffled epoch coverage, without source oversampling.
+
 The [player-only curriculum](docs/playerCurriculum.md) trains independent YOLO26
 n/s/m/l/x detectors through 1/2/4 athlete classes, without ball targets, using
 `--curriculum players`. It reuses shared images and stage-local memory recovery.
