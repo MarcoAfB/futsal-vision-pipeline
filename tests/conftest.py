@@ -55,6 +55,40 @@ def playerCurriculumView(trainingBundle, preparedSources, tmp_path):
 
 
 @pytest.fixture
+def ballMixedView(preparedSources, tmp_path):
+    from futsal.datasets.datasetExport import prepareDataset
+    from futsal.datasets.datasetPlan import buildDatasetPlan, writeDatasetPlan
+    from futsal.datasets.mediaRegistration import registerMedia
+    from futsal.datasets.objectCurriculum import prepareObjectCurriculum
+
+    dataRoot, sourceConfig, _ = preparedSources
+    for path in dataRoot.glob("video*.xml"):
+        tree = ElementTree.parse(path)
+        ball = tree.getroot().find("track[@label='Bola']")
+        ball.remove(ball.find("ellipse[@frame='1']"))
+        tree.write(path, encoding="utf-8")
+    negative = dataRoot / "futsal4400/negative.jpg"
+    assert cv2.imwrite(str(negative), np.full((64, 96, 3), 200, dtype=np.uint8))
+    negative.with_suffix(".txt").write_text("1 0.3 0.5 0.1 0.4\n")
+    parent = buildDatasetPlan(sourceConfig, dataRoot)
+    native = writeDatasetPlan(parent, tmp_path / "ballNative", dataRoot)
+    bundle = tmp_path / "ballParent"
+    prepareDataset(native, dataRoot, bundle, progress=lambda message: None)
+    recipe = yaml.safe_load(Path("configs/ballMixed.yaml").read_text())
+    recipe.pop("splitPath")
+    recipe["tasks"][-1]["trainingSources"] = ["own", *[s["sourceId"] for s in parent["catalog"]["data"]["publicSources"]]]
+    recipePath = sourceConfig.with_name("ballMixed.yaml")
+    recipePath.write_text(yaml.safe_dump(recipe))
+    store, view = tmp_path / "ballMixedStore", tmp_path / "ballMixedView"
+    registerMedia(store, bundle)
+    prepareObjectCurriculum(bundle, recipePath, store, tmp_path / "ballMixedPlan", view,
+                            curriculum="ballMixed", progress=lambda message: None)
+    configPath = tmp_path / "ballMixedTraining.yaml"
+    configPath.write_bytes(Path("configs/training/ballMixed.yaml").read_bytes())
+    return view, store, configPath
+
+
+@pytest.fixture
 def trackingView(trainingBundle, preparedSources, tmp_path):
     from futsal.datasets.mediaRegistration import registerMedia
     from futsal.datasets.sharedViews import prepareView

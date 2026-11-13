@@ -1,7 +1,7 @@
 import copy
 from pathlib import Path
 
-from futsal.datasets.curriculumVariants import curriculumVariant
+from futsal.datasets.curriculumVariants import curriculumVariant, trainingVariant
 from futsal.datasets.datasetFiles import hashJson, validateNewOutput
 from futsal.datasets.datasetPlan import loadDatasetPlan, validatePlan, writeDatasetPlan
 from futsal.datasets.datasetSamples import classifySample, summarizeEligibility
@@ -16,7 +16,7 @@ def validateCurriculumParent(parent, recipe):
     if recipe.catalog.labels != parent["catalog"]["labels"] or (
         scientificCatalog(recipe.catalog.data) != scientificCatalog(parent["catalog"]["data"])
     ):
-        raise ValueError("Object curriculum requires the same scientific source catalogue and labels.")
+        raise ValueError("Training derivation requires the same scientific source catalogue and labels.")
     oldTasks = {task["taskId"]: task for task in parent["recipe"]["tasks"]}
     newTasks = {task["taskId"]: task for task in recipe.data["tasks"]}
     coverage = parent["recipe"]["coverageTask"]
@@ -74,7 +74,7 @@ def prepareObjectCurriculum(sourceDatasetDir, configPath, mediaStoreDir, planDir
     from futsal.datasets.mediaRegistration import registerMedia
     from futsal.datasets.sharedViews import prepareView
 
-    curriculumVariant(curriculum)
+    trainingVariant(curriculum)
     source, configPath, store, planDir, output = (Path(path).resolve() for path in
         (sourceDatasetDir, configPath, mediaStoreDir, planDir, datasetDir))
     project = Path(__file__).resolve().parents[3]
@@ -89,6 +89,10 @@ def prepareObjectCurriculum(sourceDatasetDir, configPath, mediaStoreDir, planDir
         from futsal.datasets.playerCurriculum import buildPlayerCurriculumPlan
 
         builder = buildPlayerCurriculumPlan
+    elif curriculum == "ballMixed":
+        from futsal.datasets.ballMixed import buildBallMixedPlan
+
+        builder = buildBallMixedPlan
     plan = builder(loadDatasetPlan(source / "plan.json"), loadRecipe(configPath))
     writeDatasetPlan(plan, planDir, source, protectedPaths=protected)
     registration = registerMedia(store, planDir, progress=progress)
