@@ -8,6 +8,7 @@ from pathlib import Path
 
 import yaml
 
+from futsal.datasets.curriculumVariants import curriculumVariant
 from futsal.datasets.datasetFiles import readJson, verifyEvidence, writeJson
 from futsal.inventory.catalog import hashFile
 from futsal.reporting.report import atomicWrite
@@ -139,7 +140,8 @@ def worker(payload):
     return 0 if completed or diagnostic else 1
 
 
-def campaignIdentity(project, dataset, store, configPath, evaluationConfig, sizes, weightsRoot, workDir, campaignDir):
+def campaignIdentity(project, dataset, store, configPath, evaluationConfig, sizes, weightsRoot, workDir, campaignDir,
+                     curriculum="objects"):
     from futsal.datasets.sharedViews import verifyView
     from futsal.training.modelWeights import verifyWeights
     from futsal.training.trainingData import selectTrainingData
@@ -150,18 +152,22 @@ def campaignIdentity(project, dataset, store, configPath, evaluationConfig, size
     if git("status", "--porcelain"):
         raise ValueError("Campaign requires a clean frozen checkout.")
     verification = verifyView(dataset, store)
-    config = loadTrainingConfig(configPath, readJson(dataset / "plan.json")["recipe"])
+    recipe = readJson(dataset / "plan.json")["recipe"]
+    config = loadTrainingConfig(configPath, recipe)
+    expected = curriculumVariant(curriculum)["tasks"]
+    active = {task["taskId"]: task["classes"] for task in recipe["tasks"] if task["taskId"] in recipe["curriculum"]}
     if config["purpose"] != "scientificTraining" or config["seed"] != 42 or config["device"] == "cpu" or (
-        [stage["taskId"] for stage in config["stages"]] != ["genericObjects", "roleObjects", "detailedObjects"]
+        [stage["taskId"] for stage in config["stages"]] != list(expected) or recipe["curriculum"] != list(expected)
+        or active != expected
         or any(stageParameters(config, stage)["batch"] != 8 for stage in config["stages"])
     ):
-        raise ValueError("Campaign requires the scientific 2 -> 3 -> 5 seed42 GPU profile, starting each stage at batch8.")
+        raise ValueError(f"Campaign requires the matching {curriculum} scientific seed42 GPU profile, starting each stage at batch8.")
     if not sizes or len(sizes) != len(set(sizes)):
         raise ValueError("Campaign model sizes must be a nonempty unique sequence.")
     selectTrainingData(dataset, config)
     files = [*sorted((project / "src").rglob("*.py")), *sorted((project / "scripts").glob("*.py")),
              project / "pyproject.toml", project / "uv.lock", configPath, evaluationConfig]
-    identity = {"commit": git("rev-parse", "HEAD"), "files": {str(path): hashFile(path) for path in files},
+    identity = {"curriculum": curriculum, "commit": git("rev-parse", "HEAD"), "files": {str(path): hashFile(path) for path in files},
         "contractSha256": hashFile(dataset / "contract.json"),
         "contractId": verification["contractId"], "datasetDir": str(dataset), "mediaStoreDir": str(store),
         "configuration": config, "modelSizes": sizes, "workDir": str(workDir), "campaignDir": str(campaignDir),
@@ -171,9 +177,10 @@ def campaignIdentity(project, dataset, store, configPath, evaluationConfig, size
 
 
 def trainCampaign(project, script, *, datasetDir, mediaStoreDir, workDir, campaignDir, configPath,
-                  evaluationConfig, weightsRoot, modelSizes, resume=False):
+                  evaluationConfig, weightsRoot, modelSizes, resume=False, curriculum="objects"):
     from futsal.datasets.mediaStore import readBindings
 
+    curriculumVariant(curriculum)
     dataset, store, work, directory, configPath, evaluationConfig, weightsRoot = (Path(path).resolve() for path in
         (datasetDir, mediaStoreDir, workDir, campaignDir, configPath, evaluationConfig, weightsRoot))
     runRoot, reportRoot, workRoot = (work / name / directory.name for name in ("runs", "reports", "evaluationWork"))
@@ -187,7 +194,8 @@ def trainCampaign(project, script, *, datasetDir, mediaStoreDir, workDir, campai
         if target.exists() and not target.is_dir():
             raise ValueError("Campaign output roots must be directories.")
     with campaignLock(directory):
-        identity = campaignIdentity(project, dataset, store, configPath, evaluationConfig, modelSizes, weightsRoot, work, directory)
+        identity = campaignIdentity(project, dataset, store, configPath, evaluationConfig, modelSizes, weightsRoot,
+                                    work, directory, curriculum)
         statePath = directory / "campaign.json"
         if statePath.exists():
             if not resume:

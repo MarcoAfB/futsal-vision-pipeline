@@ -17,15 +17,16 @@ from futsal.training.trainingConfig import stageParameters
 from futsal.training.trainingRun import fileEvidence
 
 
-@pytest.fixture
-def campaignHarness(objectCurriculumView, tmp_path, monkeypatch):
+@pytest.fixture(params=["objects", "players"])
+def campaignHarness(request, tmp_path, monkeypatch):
     from futsal.training.modelWeights import prepareWeights
 
-    view, store, configFile = objectCurriculumView
+    variant = request.param
+    view, store, configFile = request.getfixturevalue("objectCurriculumView" if variant == "objects" else "playerCurriculumView")
     config = yaml.safe_load(configFile.read_text())
     config.update(device="cpu", evaluationDevice="cpu")
     monkeypatch.setattr("futsal.training.modelWeights.downloadWeights", lambda url, path: path.write_bytes(b"fixture"))
-    identity = {"configuration": config, "datasetDir": str(view), "mediaStoreDir": str(store), "weights": {}}
+    identity = {"curriculum": variant, "configuration": config, "datasetDir": str(view), "mediaStoreDir": str(store), "weights": {}}
     for size in ("n", "s"):
         weights = tmp_path / f"weights{size}"
         metadata = prepareWeights(size, weights)
@@ -35,6 +36,7 @@ def campaignHarness(objectCurriculumView, tmp_path, monkeypatch):
     calls, actions = [], []
     control = {"failTask": None, "minimumBatch": 4, "reportFailure": False, "interrupt": False}
     control["identity"] = identity
+    control["tasks"] = [stage["taskId"] for stage in config["stages"]]
 
     def train(config, task, stage, weights, stageDir, runDir, evidence, **kwargs):
         batch = stageParameters(config, stage)["batch"]
@@ -71,18 +73,18 @@ def campaignHarness(objectCurriculumView, tmp_path, monkeypatch):
 
 def testQueueReusesCompletedStagesAndReturnsToEight(campaignHarness):
     process, calls, _, control = campaignHarness
-    control["failTask"] = "roleObjects"
+    generic, role, detailed = control["tasks"]
+    control["failTask"] = role
     model = {"attempts": []}
     process(model)
     assert model["status"] == "completed"
-    assert calls == [("n", "genericObjects", 8), ("n", "roleObjects", 8),
-                     ("n", "roleObjects", 4), ("n", "detailedObjects", 8)]
+    assert calls == [("n", generic, 8), ("n", role, 8), ("n", role, 4), ("n", detailed, 8)]
     assert [Path(item["runDir"]).name for item in model["attempts"]] == ["yolo26nRealAttempt01", "yolo26nRealAttempt02"]
 
 
 def testBatchOneExhaustionPreservesAttemptsAndAllowsNextSize(campaignHarness):
     process, calls, _, control = campaignHarness
-    control.update(failTask="genericObjects", minimumBatch=0)
+    control.update(failTask=control["tasks"][0], minimumBatch=0)
     first, second = {"attempts": []}, {"attempts": []}
     process(first)
     process(second, "s")
@@ -110,13 +112,14 @@ def testReportOnlyResumeNeverRetrains(campaignHarness):
 
 def testInterruptionStopsThenStrictlyContinuesPrefix(campaignHarness):
     process, calls, _, control = campaignHarness
-    control.update(failTask="roleObjects", interrupt=True, minimumBatch=8)
+    generic, role, detailed = control["tasks"]
+    control.update(failTask=role, interrupt=True, minimumBatch=8)
     model = {"attempts": []}
     with pytest.raises(KeyboardInterrupt):
         process(model)
-    assert calls == [("n", "genericObjects", 8), ("n", "roleObjects", 8)]
+    assert calls == [("n", generic, 8), ("n", role, 8)]
     process(model)
-    assert calls[2:] == [("n", "roleObjects", 8), ("n", "detailedObjects", 8)]
+    assert calls[2:] == [("n", role, 8), ("n", detailed, 8)]
     assert "continueFrom" in model["attempts"][-1]
 
 
@@ -160,21 +163,46 @@ def testCampaignResumeKeepsIdentityAndDoesNotDuplicateTraining(campaignHarness, 
     _, calls, _, control = campaignHarness
     identity = control["identity"]
     identity.update(files={}, contractSha256=hashFile(Path(identity["datasetDir"]) / "contract.json"))
-    monkeypatch.setattr("futsal.training.objectCampaign.campaignIdentity", lambda *args: copy.deepcopy(identity))
+    monkeypatch.setattr("futsal.training.objectCampaign.campaignIdentity", lambda *args:
+                        {**copy.deepcopy(identity), "curriculum": args[-1]})
     monkeypatch.setattr("futsal.training.objectCampaign.runWorker", lambda script, project, directory, payload, name:
                         0 if payload["action"] in {"environment", "report"} else worker(payload))
     options = {"project": Path.cwd(), "script": Path("scripts/runObjectCurriculum.py"),
         "datasetDir": identity["datasetDir"], "mediaStoreDir": identity["mediaStoreDir"],
         "workDir": tmp_path / "work", "campaignDir": tmp_path / "campaign",
         "configPath": tmp_path / "objectTraining.yaml", "evaluationConfig": Path("configs/evaluation/researchValidation.yaml"),
-        "weightsRoot": tmp_path / "weights", "modelSizes": ["n"]}
+        "weightsRoot": tmp_path / "weights", "modelSizes": ["n"], "curriculum": identity["curriculum"]}
     assert trainCampaign(**options) == 0
     count = len(calls)
     assert trainCampaign(**options, resume=True) == 0
     assert len(calls) == count
+    with pytest.raises(ValueError, match="changed"):
+        trainCampaign(**{**options, "curriculum": "players" if identity["curriculum"] == "objects" else "objects"}, resume=True)
+    assert len(calls) == count
     identity["configuration"]["seed"] = 43
     with pytest.raises(ValueError, match="changed"):
         trainCampaign(**options, resume=True)
+
+
+@pytest.mark.parametrize("viewFixture,variant", [("objectCurriculumView", "objects"), ("playerCurriculumView", "players")])
+def testCampaignIdentityChecksVariantAgainstNativeTaskClasses(request, tmp_path, monkeypatch, viewFixture, variant):
+    from types import SimpleNamespace
+
+    from futsal.training.modelWeights import prepareWeights
+    from futsal.training.objectCampaign import campaignIdentity
+
+    view, store, profile = request.getfixturevalue(viewFixture)
+    monkeypatch.setattr("futsal.training.objectCampaign.subprocess.run", lambda command, **kw:
+                        SimpleNamespace(stdout="" if "status" in command else "fixtureCommit"))
+    monkeypatch.setattr("futsal.training.modelWeights.downloadWeights", lambda url, path: path.write_bytes(b"fixture"))
+    weights = tmp_path / "weights"
+    prepareWeights("n", weights / "yolo26n")
+    arguments = [Path.cwd(), view, store, profile, Path("configs/evaluation/researchValidation.yaml"), ["n"], weights,
+                 tmp_path / "work", tmp_path / "campaign"]
+    identity = campaignIdentity(*arguments, curriculum=variant)
+    assert identity["curriculum"] == variant
+    with pytest.raises(ValueError):
+        campaignIdentity(*arguments, curriculum="players" if variant == "objects" else "objects")
 
 
 def testWorkersUseIsolatedOfflineProcesses(tmp_path, monkeypatch):
