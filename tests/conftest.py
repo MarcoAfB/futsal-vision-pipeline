@@ -9,6 +9,29 @@ import yaml
 
 
 @pytest.fixture
+def objectCurriculumView(trainingBundle, preparedSources, tmp_path):
+    from futsal.datasets.datasetFiles import readJson
+    from futsal.datasets.mediaRegistration import registerMedia
+    from futsal.datasets.objectCurriculum import prepareObjectCurriculum
+
+    bundle, _, _ = trainingBundle
+    parent = readJson(bundle / "plan.json")
+    recipe = yaml.safe_load(Path("configs/objectCurriculum.yaml").read_text())
+    recipe.pop("splitPath")
+    for index in (0, 1):
+        recipe["tasks"][index] = parent["recipe"]["tasks"][index]
+    recipePath = preparedSources[1].with_name("objectCurriculum.yaml")
+    recipePath.write_text(yaml.safe_dump(recipe))
+    store, view = tmp_path / "objectStore", tmp_path / "objectView"
+    registerMedia(store, bundle)
+    prepareObjectCurriculum(bundle, recipePath, store, tmp_path / "objectPlan", view, progress=lambda message: None)
+    profile = yaml.safe_load(Path("configs/training/yolo26ObjectCurriculum.yaml").read_text())
+    configPath = tmp_path / "objectTraining.yaml"
+    configPath.write_text(yaml.safe_dump(profile))
+    return view, store, configPath
+
+
+@pytest.fixture
 def trackingView(trainingBundle, preparedSources, tmp_path):
     from futsal.datasets.mediaRegistration import registerMedia
     from futsal.datasets.sharedViews import prepareView
