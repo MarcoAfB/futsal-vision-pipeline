@@ -124,6 +124,9 @@ completed collection does not invalidate another run's pinned input selection.
 
 ## Incremental transport and relocation
 
+The [player curriculum](playerCurriculum.md) reuses these contracts and transport
+commands for player-only 1/2/4 tasks, including only newly eligible missing assets.
+
 On the receiver, register existing datasets once and write a verified inventory:
 
 ```text

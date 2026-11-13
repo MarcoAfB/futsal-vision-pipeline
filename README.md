@@ -1,5 +1,9 @@
 # Futsal
 
+The [player-only curriculum](docs/playerCurriculum.md) trains independent YOLO26
+n/s/m/l/x detectors through 1/2/4 athlete classes, without ball targets, using
+`--curriculum players`. It reuses shared images and stage-local memory recovery.
+
 Train a public-to-own object curriculum through 2, 3 and 5 classes, including ball
 at every stage, with independent YOLO26 n/s/m/l/x models. See the
 [object curriculum guide](docs/objectCurriculum.md) for shared-view preparation,

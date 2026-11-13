@@ -1,5 +1,9 @@
 # Public-to-own object curriculum
 
+Use the [player-only variant](playerCurriculum.md) for 1/2/4 classes without ball.
+The shared launcher accepts `--curriculum objects|players`; objects remains the
+default for existing commands. Select the matching recipe, view and profile.
+
 `configs/objectCurriculum.yaml` defines a detector curriculum with ball in every
 stage. Each selected YOLO26 size starts independently from its matching official
 weights and transfers the previous stage's best checkpoint to the next stage.
