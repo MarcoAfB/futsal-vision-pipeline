@@ -214,15 +214,16 @@ def testSizeWeightMismatchFailsBeforeCreatingRun(trainingBundle, localWeights, t
 
 
 @pytest.mark.parametrize("failedIndex", [0, 1, 2])
-def testMemoryRetryChangesOnlyFailedBatchAndReusesPrefix(objectCurriculumView, localWeights,
-                                                        fakeTraining, tmp_path, monkeypatch, failedIndex):
+@pytest.mark.parametrize("viewFixture", ["objectCurriculumView", "playerCurriculumView"])
+def testMemoryRetryChangesOnlyFailedBatchAndReusesPrefix(request, localWeights,
+                                                        fakeTraining, tmp_path, monkeypatch, failedIndex, viewFixture):
     import copy
 
     import yaml
 
     from futsal.training.trainingConfig import stageParameters
 
-    view, store, configPath = objectCurriculumView
+    view, store, configPath = request.getfixturevalue(viewFixture)
     config = yaml.safe_load(configPath.read_text())
     config.update(device="cpu", evaluationDevice="cpu")
     configPath.write_text(yaml.safe_dump(config))
@@ -265,17 +266,18 @@ def testMemoryRetryChangesOnlyFailedBatchAndReusesPrefix(objectCurriculumView, l
 
 
 @pytest.mark.parametrize("mutation", ["seed", "lr", "futureBatch", "completedBatch", "weights", "nonMemory", "code"])
-def testMemoryRetryRejectsUnrelatedChanges(objectCurriculumView, localWeights, fakeTraining,
-                                           tmp_path, monkeypatch, mutation):
+@pytest.mark.parametrize("viewFixture", ["objectCurriculumView", "playerCurriculumView"])
+def testMemoryRetryRejectsUnrelatedChanges(request, localWeights, fakeTraining,
+                                           tmp_path, monkeypatch, mutation, viewFixture):
     import yaml
 
-    view, store, configPath = objectCurriculumView
+    view, store, configPath = request.getfixturevalue(viewFixture)
     config = yaml.safe_load(configPath.read_text())
     config.update(device="cpu", evaluationDevice="cpu")
     configPath.write_text(yaml.safe_dump(config))
 
     def injected(config, task, stage, *args, **kwargs):
-        if stage["taskId"] == "roleObjects":
+        if stage["taskId"] == config["stages"][1]["taskId"]:
             raise RuntimeError("CUDA error: unknown error" if mutation == "nonMemory" else "CUDA out of memory")
         return fakeTraining(config, task, stage, *args)
 
