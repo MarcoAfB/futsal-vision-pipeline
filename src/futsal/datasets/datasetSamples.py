@@ -12,6 +12,7 @@ def classifySample(sample, task, pointClasses):
     if sample["origin"] == "public" and sample.get("emptyLabel"):
         reasons.add("emptyPublicLabel")
     counts = Counter()
+    ignored = set(task.get("ignoredSourceClasses", []))
     for index, annotation in enumerate(sample["annotations"]):
         action = annotation["mappingAction"]
         if action == "ignore":
@@ -20,6 +21,8 @@ def classifySample(sample, task, pointClasses):
             reasons.add("unmappedLabel")
             continue
         sourceClass = annotation.get("canonicalClass") or annotation.get("semanticClass")
+        if sourceClass in ignored:
+            continue
         targetClass = task["classMap"].get(sourceClass)
         if targetClass is None:
             if sourceClass in {"player", "outfieldPlayer", "goalkeeper"}:

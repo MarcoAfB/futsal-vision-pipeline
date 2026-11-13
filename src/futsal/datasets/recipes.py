@@ -44,6 +44,12 @@ def validateTask(task, canonicalNames, semanticNames, publicIds):
         raise ValueError("Task mapping contains unknown source semantics.")
     if not set(mapping.values()) <= set(classes) or set(mapping.values()) != set(classes):
         raise ValueError("Task mapping must cover exactly its declared output classes.")
+    ignored = task.get("ignoredSourceClasses", [])
+    if not isinstance(ignored, list) or not all(isinstance(name, str) for name in ignored) or (
+        not set(ignored) <= set(canonicalNames) | semanticNames or set(ignored) & set(mapping)
+    ):
+        raise ValueError("ignoredSourceClasses must contain known source classes disjoint from classMap.")
+    requireUnique(ignored, "ignored source classes")
     sources = task["trainingSources"]
     if not isinstance(sources, list) or not sources or not set(sources) <= publicIds | {"own"}:
         raise ValueError("Task trainingSources must identify registered public sources or own.")
