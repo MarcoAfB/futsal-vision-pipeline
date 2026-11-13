@@ -8,6 +8,22 @@ import pytest
 import yaml
 
 
+@pytest.fixture
+def trackingView(trainingBundle, preparedSources, tmp_path):
+    from futsal.datasets.mediaRegistration import registerMedia
+    from futsal.datasets.sharedViews import prepareView
+
+    bundle, _, _ = trainingBundle
+    store, view = tmp_path / "mediaStore", tmp_path / "ballView"
+    registerMedia(store, bundle)
+    recipe = yaml.safe_load(Path("configs/sharedDetection.yaml").read_text())
+    recipe.pop("splitPath")
+    recipeFile = preparedSources[1].with_name("ballView.yaml")
+    recipeFile.write_text(yaml.safe_dump(recipe))
+    prepareView(store, recipeFile, view, dataRoot=preparedSources[0], progress=lambda message: None)
+    return view, store
+
+
 @pytest.fixture(scope="session")
 def syntheticSource(tmp_path_factory):
     from futsal.datasets.syntheticCourt import generateSyntheticCourt
