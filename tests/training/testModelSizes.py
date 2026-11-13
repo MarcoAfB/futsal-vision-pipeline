@@ -14,6 +14,8 @@ def testEveryTrainingProfileAcceptsEveryModelSize(tmp_path, profile, modelSize):
     recipePath = "configs/curriculum.yaml" if profile.stem.startswith("yolo26") else "configs/sharedDetection.yaml"
     if profile.stem == "yolo26ObjectCurriculum":
         recipePath = "configs/objectCurriculum.yaml"
+    elif profile.stem == "yolo26PlayerCurriculum":
+        recipePath = "configs/playerCurriculum.yaml"
     recipe = yaml.safe_load(Path(recipePath).read_text())
     config["modelSize"] = modelSize
     path = tmp_path / "profile.yaml"
