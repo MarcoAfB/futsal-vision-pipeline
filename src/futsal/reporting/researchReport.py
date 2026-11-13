@@ -22,6 +22,26 @@ def number(value):
     return "N/A" if value is None else f"{value:.6g}" if isinstance(value, float) else str(value)
 
 
+def batchLineage(run):
+    config = run.get("configuration", {})
+    rows = {stage["taskId"]: stage for stage in run.get("stages", [])}
+    lines = [f"Batch recovery policy: **{run.get('batchRecovery', 'native')}**.", ""]
+    lines += markdownTable(["Stage", "Requested batch", "Effective batch", "Reused from run SHA-256"], [
+        [stage["taskId"], stage.get("parameters", {}).get("batch", config.get("parameters", {}).get("batch")),
+         rows.get(stage["taskId"], {}).get("results", {}).get("training", {}).get("effectiveBatch"),
+         rows.get(stage["taskId"], {}).get("reusedFromRunSha256", "None")]
+        for stage in config.get("stages", [])])
+    if run.get("continuation"):
+        parent = run["continuation"]
+        lines += [f"Attempt parent: `{parent['previousRunSha256']}`; reason: "
+                  f"{parent.get('reason', 'strictContinuation')}; reused stages: {parent['completedStageCount']}. "
+                  "The next stage starts at epoch zero with a fresh optimizer.", ""]
+        if parent.get("reason") == "memoryRetry":
+            lines += [f"Memory retry: {parent['taskId']}, batch {parent['previousBatch']} -> {parent['requestedBatch']}. "
+                      f"Ancestry: {', '.join(parent['ancestry'])}.", ""]
+    return lines
+
+
 def elapsedSeconds(record, endField="endedAt"):
     if not record.get("startedAt") or not record.get(endField):
         return None
@@ -266,12 +286,13 @@ def reportMarkdown(root, state):
         lines += ["### Training execution" if independent else "### Curriculum execution", "",
                   f"Seed: {trainingConfig['seed']}; source policy: {trainingConfig['sourcePolicy']}; "
                   f"evaluation device: {state.get('requestedDevice', 'cpu')}; "
-                  f"physical batch: {trainingConfig['parameters']['batch']}; nominal batch: {trainingConfig['parameters']['nbs']}.", "",
+                  f"nominal batch: {trainingConfig['parameters']['nbs']}.", "",
                   f"Method ID: `{state['training'].get('methodId', 'unavailable')}`. "
                   f"Resolved configuration ID: `{state['training'].get('configurationId', 'unavailable')}`.", "",
                   "Validation uses every eligible record per task. The common intersection is reserved for shared "
                   "examples; it does not reduce task metrics. runValidation and fullValidation select the same "
                   "cohorts for this full-data profile; automatic evaluation runs once.", ""]
+        lines += batchLineage(state["training"])
         if state["training"].get("syntheticSource"):
             supplement = state["training"]["syntheticSource"]
             lines += [f"Synthetic court training images: {supplement['imageCount']}; "
@@ -395,6 +416,7 @@ def renderTrainingReport(runDir, outputDir):
              *markdownTable(["Stage", "Status"], [[stage["taskId"], next((row["status"] for row in run["stages"]
                               if row["taskId"] == stage["taskId"]), "notExecuted")]
                               for stage in run["configuration"]["stages"]])]
+    lines += batchLineage(run)
     if run.get("error"):
         lines += [f"Failure: `{run['error']['type']}: {run['error']['message']}`.", ""]
     lines += ["[Archived execution metadata](trainingRun.json)", ""]
