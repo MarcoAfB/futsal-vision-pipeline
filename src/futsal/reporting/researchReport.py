@@ -15,11 +15,22 @@ from futsal.inventory.catalog import hashFile, resolveSourcePath
 from futsal.reporting.report import atomicWrite, markdownCell
 from futsal.reporting.reportExamples import renderExamples
 from futsal.reporting.researchFigures import stageFigures
+from futsal.training.trainingExposure import sourceComposition
 from futsal.training.trainingRun import fileEvidence, utcNow
 
 
 def number(value):
     return "N/A" if value is None else f"{value:.6g}" if isinstance(value, float) else str(value)
+
+
+def mixedSourceMarkdown(rows):
+    if {row.get("origin") for row in rows} != {"own", "public"}:
+        return []
+    return ["Public and own records are mixed in one training stage. Positive/negative counts refer to this task's targets.", "",
+            *markdownTable(["Source", "Origin", "Images", "Positive images", "Negative images", "Targets"], [
+                [row[key] for key in ("sourceId", "origin", "imageCount", "positiveImages", "negativeImages", "targetCount")]
+                for row in sourceComposition(rows)]),
+            *markdownTable(["Origin", "Images"], sorted(Counter(row["origin"] for row in rows).items()))]
 
 
 def batchLineage(run):
@@ -159,12 +170,18 @@ def stageMarkdown(root, state, stage):
     selectionPath = root / "evidence" / "trainingSelection.json"
     if selectionPath.is_file():
         selected = readJson(selectionPath)["tasks"][taskId]["training"]
-        lines += markdownTable(["Training source", "Selected images"], sorted(Counter(row["sourceId"] for row in selected).items()))
+        lines += mixedSourceMarkdown(selected) or markdownTable(
+            ["Training source", "Selected images"], sorted(Counter(row["sourceId"] for row in selected).items()))
     if training:
         lines += [f"Training stage elapsed: {number(elapsedSeconds(training, 'completedAt'))} s "
                   "(including setup and validation).", ""]
         execution = training.get("results", {}).get("training")
         if execution:
+            if execution.get("sampling"):
+                sample = execution["sampling"]
+                lines += [f"Sampling: {sample['policy']}; shuffled: {sample['shuffle']}; replacement: {sample['replacement']}; "
+                          f"drop last batch: {sample['dropLast']}; images per epoch: {sample['imagesPerEpoch']}; "
+                          f"fully verified epochs: {sample['verifiedEpochs']}.", ""]
             lines += markdownTable(["Maximum epochs", "Completed epochs", "Best epoch", "Device", "AMP", "Peak CUDA allocated (MiB)"],
                 [[execution["requestedEpochs"], execution["completedEpochs"], execution["bestEpoch"],
                   execution["device"], execution["amp"], execution["peakCudaAllocatedBytes"] / 1024 ** 2
@@ -417,13 +434,23 @@ def renderTrainingReport(runDir, outputDir):
                               if row["taskId"] == stage["taskId"]), "notExecuted")]
                               for stage in run["configuration"]["stages"]])]
     lines += batchLineage(run)
+    selectionPath = runDir / "selection.json"
+    if selectionPath.is_file():
+        if run.get("selectionSha256") and hashFile(selectionPath) != run["selectionSha256"]:
+            raise ValueError("Training selection changed before report rendering.")
+        shutil.copyfile(selectionPath, root / "trainingSelection.json")
+        for taskId, task in readJson(selectionPath)["tasks"].items():
+            composition = mixedSourceMarkdown(task["training"])
+            if composition:
+                lines += [f"## {taskId}: selected training data", "", *composition]
     if run.get("error"):
         lines += [f"Failure: `{run['error']['type']}: {run['error']['message']}`.", ""]
     lines += ["[Archived execution metadata](trainingRun.json)", ""]
     atomicWrite(root / "report.md", "\n".join(lines))
     writeJson(root / "reportState.json", {"schemaVersion": 1, "status": "completed", "runId": runDir.name,
               "purpose": run["purpose"], "selection": "notEvaluated", "trainingStatus": run["status"],
-              "evaluationStatus": "notExecuted", "endedAt": utcNow()})
+              "evaluationStatus": "notExecuted", "endedAt": utcNow(),
+              "artifacts": [fileEvidence(path, root) for path in sorted(root.iterdir()) if path.is_file()]})
     catalog = next((parent for parent in root.parents if parent.name == "reports"), None)
     if catalog:
         updateReportIndex(catalog)
