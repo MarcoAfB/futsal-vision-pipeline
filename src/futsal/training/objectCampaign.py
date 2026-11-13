@@ -8,7 +8,7 @@ from pathlib import Path
 
 import yaml
 
-from futsal.datasets.curriculumVariants import curriculumVariant
+from futsal.datasets.curriculumVariants import trainingVariant
 from futsal.datasets.datasetFiles import readJson, verifyEvidence, writeJson
 from futsal.inventory.catalog import hashFile
 from futsal.reporting.report import atomicWrite
@@ -154,7 +154,7 @@ def campaignIdentity(project, dataset, store, configPath, evaluationConfig, size
     verification = verifyView(dataset, store)
     recipe = readJson(dataset / "plan.json")["recipe"]
     config = loadTrainingConfig(configPath, recipe)
-    expected = curriculumVariant(curriculum)["tasks"]
+    expected = trainingVariant(curriculum)["tasks"]
     active = {task["taskId"]: task["classes"] for task in recipe["tasks"] if task["taskId"] in recipe["curriculum"]}
     if config["purpose"] != "scientificTraining" or config["seed"] != 42 or config["device"] == "cpu" or (
         [stage["taskId"] for stage in config["stages"]] != list(expected) or recipe["curriculum"] != list(expected)
@@ -164,7 +164,13 @@ def campaignIdentity(project, dataset, store, configPath, evaluationConfig, size
         raise ValueError(f"Campaign requires the matching {curriculum} scientific seed42 GPU profile, starting each stage at batch8.")
     if not sizes or len(sizes) != len(set(sizes)):
         raise ValueError("Campaign model sizes must be a nonempty unique sequence.")
-    selectTrainingData(dataset, config)
+    selection = selectTrainingData(dataset, config)
+    if curriculum == "ballMixed":
+        from futsal.datasets.ballMixed import validateBallMixedRecipe
+
+        validateBallMixedRecipe(recipe, readJson(dataset / "plan.json")["catalog"]["data"])
+        if {row["origin"] for row in selection["tasks"]["ballOnly"]["training"]} != {"own", "public"}:
+            raise ValueError("Mixed ball campaign requires both public and own training records.")
     files = [*sorted((project / "src").rglob("*.py")), *sorted((project / "scripts").glob("*.py")),
              project / "pyproject.toml", project / "uv.lock", configPath, evaluationConfig]
     identity = {"curriculum": curriculum, "commit": git("rev-parse", "HEAD"), "files": {str(path): hashFile(path) for path in files},
@@ -173,6 +179,8 @@ def campaignIdentity(project, dataset, store, configPath, evaluationConfig, size
         "configuration": config, "modelSizes": sizes, "workDir": str(workDir), "campaignDir": str(campaignDir),
         "weights": {size: {"path": str(weightsRoot / f"yolo26{size}" / f"yolo26{size}.pt"),
             "metadata": verifyWeights(weightsRoot / f"yolo26{size}" / f"yolo26{size}.pt", size)} for size in sizes}}
+    if curriculum == "ballMixed":
+        identity["trainingMode"] = "naturalMixedSources"
     return identity
 
 
@@ -180,7 +188,7 @@ def trainCampaign(project, script, *, datasetDir, mediaStoreDir, workDir, campai
                   evaluationConfig, weightsRoot, modelSizes, resume=False, curriculum="objects"):
     from futsal.datasets.mediaStore import readBindings
 
-    curriculumVariant(curriculum)
+    trainingVariant(curriculum)
     dataset, store, work, directory, configPath, evaluationConfig, weightsRoot = (Path(path).resolve() for path in
         (datasetDir, mediaStoreDir, workDir, campaignDir, configPath, evaluationConfig, weightsRoot))
     runRoot, reportRoot, workRoot = (work / name / directory.name for name in ("runs", "reports", "evaluationWork"))

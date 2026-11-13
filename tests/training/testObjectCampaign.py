@@ -17,12 +17,12 @@ from futsal.training.trainingConfig import stageParameters
 from futsal.training.trainingRun import fileEvidence
 
 
-@pytest.fixture(params=["objects", "players"])
+@pytest.fixture(params=["objects", "players", "ballMixed"])
 def campaignHarness(request, tmp_path, monkeypatch):
     from futsal.training.modelWeights import prepareWeights
 
     variant = request.param
-    view, store, configFile = request.getfixturevalue("objectCurriculumView" if variant == "objects" else "playerCurriculumView")
+    view, store, configFile = request.getfixturevalue({"objects": "objectCurriculumView", "players": "playerCurriculumView", "ballMixed": "ballMixedView"}[variant])
     config = yaml.safe_load(configFile.read_text())
     config.update(device="cpu", evaluationDevice="cpu")
     monkeypatch.setattr("futsal.training.modelWeights.downloadWeights", lambda url, path: path.write_bytes(b"fixture"))
@@ -73,12 +73,14 @@ def campaignHarness(request, tmp_path, monkeypatch):
 
 def testQueueReusesCompletedStagesAndReturnsToEight(campaignHarness):
     process, calls, _, control = campaignHarness
-    generic, role, detailed = control["tasks"]
-    control["failTask"] = role
+    tasks = control["tasks"]
+    failedIndex = 1 if len(tasks) > 1 else 0
+    control["failTask"] = tasks[failedIndex]
     model = {"attempts": []}
     process(model)
     assert model["status"] == "completed"
-    assert calls == [("n", generic, 8), ("n", role, 8), ("n", role, 4), ("n", detailed, 8)]
+    assert calls == [("n", task, 8) for task in tasks[:failedIndex + 1]] + [
+        ("n", task, 4 if index == failedIndex else 8) for index, task in enumerate(tasks) if index >= failedIndex]
     assert [Path(item["runDir"]).name for item in model["attempts"]] == ["yolo26nRealAttempt01", "yolo26nRealAttempt02"]
 
 
@@ -112,15 +114,16 @@ def testReportOnlyResumeNeverRetrains(campaignHarness):
 
 def testInterruptionStopsThenStrictlyContinuesPrefix(campaignHarness):
     process, calls, _, control = campaignHarness
-    generic, role, detailed = control["tasks"]
-    control.update(failTask=role, interrupt=True, minimumBatch=8)
+    tasks = control["tasks"]
+    failedIndex = 1 if len(tasks) > 1 else 0
+    control.update(failTask=tasks[failedIndex], interrupt=True, minimumBatch=8)
     model = {"attempts": []}
     with pytest.raises(KeyboardInterrupt):
         process(model)
-    assert calls == [("n", generic, 8), ("n", role, 8)]
+    assert calls == [("n", task, 8) for task in tasks[:failedIndex + 1]]
     process(model)
-    assert calls[2:] == [("n", role, 8), ("n", detailed, 8)]
-    assert "continueFrom" in model["attempts"][-1]
+    assert calls[failedIndex + 1:] == [("n", task, 8) for task in tasks[failedIndex:]]
+    assert ("continueFrom" in model["attempts"][-1]) == (failedIndex > 0)
 
 
 def testCampaignLockAndAttemptAllocation(tmp_path):
@@ -184,7 +187,7 @@ def testCampaignResumeKeepsIdentityAndDoesNotDuplicateTraining(campaignHarness, 
         trainCampaign(**options, resume=True)
 
 
-@pytest.mark.parametrize("viewFixture,variant", [("objectCurriculumView", "objects"), ("playerCurriculumView", "players")])
+@pytest.mark.parametrize("viewFixture,variant", [("objectCurriculumView", "objects"), ("playerCurriculumView", "players"), ("ballMixedView", "ballMixed")])
 def testCampaignIdentityChecksVariantAgainstNativeTaskClasses(request, tmp_path, monkeypatch, viewFixture, variant):
     from types import SimpleNamespace
 
@@ -201,6 +204,12 @@ def testCampaignIdentityChecksVariantAgainstNativeTaskClasses(request, tmp_path,
                  tmp_path / "work", tmp_path / "campaign"]
     identity = campaignIdentity(*arguments, curriculum=variant)
     assert identity["curriculum"] == variant
+    if variant == "ballMixed":
+        assert identity["trainingMode"] == "naturalMixedSources"
+        monkeypatch.setattr("futsal.training.trainingData.selectTrainingData", lambda *a:
+                            {"tasks": {"ballOnly": {"training": [{"origin": "own"}]}}})
+        with pytest.raises(ValueError, match="both public and own"):
+            campaignIdentity(*arguments, curriculum=variant)
     with pytest.raises(ValueError):
         campaignIdentity(*arguments, curriculum="players" if variant == "objects" else "objects")
 

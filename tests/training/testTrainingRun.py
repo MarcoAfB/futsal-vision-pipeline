@@ -213,8 +213,9 @@ def testSizeWeightMismatchFailsBeforeCreatingRun(trainingBundle, localWeights, t
     assert not output.exists()
 
 
-@pytest.mark.parametrize("failedIndex", [0, 1, 2])
-@pytest.mark.parametrize("viewFixture", ["objectCurriculumView", "playerCurriculumView"])
+@pytest.mark.parametrize("viewFixture,failedIndex", [
+    (view, index) for view in ("objectCurriculumView", "playerCurriculumView") for index in (0, 1, 2)
+] + [("ballMixedView", 0)])
 def testMemoryRetryChangesOnlyFailedBatchAndReusesPrefix(request, localWeights,
                                                         fakeTraining, tmp_path, monkeypatch, failedIndex, viewFixture):
     import copy
@@ -247,7 +248,7 @@ def testMemoryRetryChangesOnlyFailedBatchAndReusesPrefix(request, localWeights,
     for batch in (4, 2, 1):
         calls.clear()
         updated = copy.deepcopy(run["configuration"])
-        updated["stages"][failedIndex]["parameters"]["batch"] = batch
+        updated["stages"][failedIndex].setdefault("parameters", {})["batch"] = batch
         configPath.write_text(yaml.safe_dump(updated))
         output = tmp_path / f"batch{batch}"
         failing = batch != 1
@@ -265,8 +266,10 @@ def testMemoryRetryChangesOnlyFailedBatchAndReusesPrefix(request, localWeights,
     assert run["status"] == "completed", run.get("error")
 
 
-@pytest.mark.parametrize("mutation", ["seed", "lr", "futureBatch", "completedBatch", "weights", "nonMemory", "code"])
-@pytest.mark.parametrize("viewFixture", ["objectCurriculumView", "playerCurriculumView"])
+@pytest.mark.parametrize("viewFixture,mutation", [
+    (view, mutation) for view in ("objectCurriculumView", "playerCurriculumView")
+    for mutation in ("seed", "lr", "futureBatch", "completedBatch", "weights", "nonMemory", "code")
+] + [("ballMixedView", mutation) for mutation in ("seed", "lr", "weights", "nonMemory", "code")])
 def testMemoryRetryRejectsUnrelatedChanges(request, localWeights, fakeTraining,
                                            tmp_path, monkeypatch, mutation, viewFixture):
     import yaml
@@ -275,20 +278,21 @@ def testMemoryRetryRejectsUnrelatedChanges(request, localWeights, fakeTraining,
     config = yaml.safe_load(configPath.read_text())
     config.update(device="cpu", evaluationDevice="cpu")
     configPath.write_text(yaml.safe_dump(config))
+    failedIndex = 1 if len(config["stages"]) > 1 else 0
 
     def injected(config, task, stage, *args, **kwargs):
-        if stage["taskId"] == config["stages"][1]["taskId"]:
+        if stage["taskId"] == config["stages"][failedIndex]["taskId"]:
             raise RuntimeError("CUDA error: unknown error" if mutation == "nonMemory" else "CUDA out of memory")
         return fakeTraining(config, task, stage, *args)
 
     monkeypatch.setattr("futsal.training.trainingRun.trainStage", injected)
     previousDir = tmp_path / "prior"
     previous = runTraining(view, configPath, localWeights, previousDir, mediaStoreDir=store, batchRecovery="fixed")
-    config["stages"][1]["parameters"]["batch"] = 4
+    config["stages"][failedIndex].setdefault("parameters", {})["batch"] = 4
     if mutation == "seed":
         config["seed"] = 43
     elif mutation == "lr":
-        config["stages"][1]["parameters"]["lr0"] = 0.2
+        config["stages"][failedIndex]["parameters"]["lr0"] = 0.2
     elif mutation == "futureBatch":
         config["stages"][2]["parameters"]["batch"] = 4
     elif mutation == "completedBatch":
