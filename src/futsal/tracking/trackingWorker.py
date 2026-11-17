@@ -4,7 +4,7 @@ from pathlib import Path
 
 from futsal.datasets.datasetFiles import readJson, writeJson
 from futsal.inventory.catalog import hashFile
-from futsal.tracking.trackingBackend import NativeBallTracker
+from futsal.tracking.trackingBackend import NativeTracker
 from futsal.training.trainingBackend import initializeBackend
 from futsal.training.trainingRun import utcNow
 
@@ -22,8 +22,8 @@ def runWorker(requestPath):
         checkpoint = Path(request["checkpoint"])
         if hashFile(checkpoint) != request["checkpointSha256"]:
             raise ValueError("Checkpoint integrity changed before worker execution.")
-        runner = NativeBallTracker(checkpoint, request["size"], request["config"], request["device"],
-                                   request["trackerPath"])
+        runner = NativeTracker(checkpoint, request["size"], request.get("classNames", ["ball"]),
+                               request["config"], request["device"], request["trackerPath"])
         with (root / "predictions.jsonl").open("x", encoding="utf-8", newline="\n") as stream:
             for reference, path in zip(request["references"], request["images"], strict=True):
                 if hashFile(Path(path)) != reference["imageSha256"]:

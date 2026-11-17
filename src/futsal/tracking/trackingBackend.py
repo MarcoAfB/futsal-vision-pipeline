@@ -39,17 +39,19 @@ def preflightTracking(config, device, runtimeDir):
     return environment, configs
 
 
-class NativeBallTracker:
-    def __init__(self, checkpoint, size, config, device, trackerPath=None):
+class NativeTracker:
+    def __init__(self, checkpoint, size, classNames, config, device, trackerPath=None):
         from ultralytics import YOLO
         from ultralytics.utils.torch_utils import init_seeds
 
         init_seeds(config["seed"], deterministic=True)
         self.model = YOLO(str(checkpoint))
         native = self.model.model
-        if native.yaml.get("scale") != size or native.names != {0: "ball"} or not native.end2end or native.model[-1].nc != 1:
-            raise ValueError("Checkpoint must be an end-to-end YOLO26 ballOnly model of the declared size.")
+        if (native.yaml.get("scale") != size or native.names != dict(enumerate(classNames))
+                or not native.end2end or native.model[-1].nc != len(classNames)):
+            raise ValueError(f"Checkpoint must be an end-to-end YOLO26 {size} model with classes {list(classNames)}.")
         native.eval().float()
+        self.classNames = list(classNames)
         self.config, self.device, self.trackerPath = config, device, trackerPath
         self.segmentId = None
 
@@ -67,10 +69,15 @@ class NativeBallTracker:
             result = self.model.predict(image, **arguments)[0]
         else:
             result = self.model.track(image, tracker=str(self.trackerPath), persist=True, **arguments)[0]
-        return resultDetections(result, tracked=self.trackerPath is not None)
+        return resultDetections(result, tracked=self.trackerPath is not None, classNames=self.classNames)
 
 
-def resultDetections(result, *, tracked):
+class NativeBallTracker(NativeTracker):
+    def __init__(self, checkpoint, size, config, device, trackerPath=None):
+        super().__init__(checkpoint, size, ["ball"], config, device, trackerPath)
+
+
+def resultDetections(result, *, tracked, classNames=("ball",)):
     boxes = result.boxes
     if boxes is None or (tracked and boxes.id is None):
         return []
@@ -78,8 +85,8 @@ def resultDetections(result, *, tracked):
     detections = []
     for box, score, classId, identity in zip(boxes.xyxy.cpu().tolist(), boxes.conf.cpu().tolist(),
                                             boxes.cls.cpu().tolist(), identities, strict=True):
-        if classId != 0 or not math.isfinite(score):
+        if classId != int(classId) or not 0 <= classId < len(classNames) or not math.isfinite(score):
             raise ValueError("Tracker returned an unexpected class or confidence.")
-        detections.append({"classId": 0, "className": "ball", "confidence": score,
+        detections.append({"classId": int(classId), "className": classNames[int(classId)], "confidence": score,
                            "box": box, "trackId": identity})
     return detections

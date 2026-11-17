@@ -8,13 +8,19 @@ from futsal.inventory.catalog import hashFile
 
 
 def selectTrackingData(datasetDir, mediaStoreDir):
+    return selectTrackedData(datasetDir, mediaStoreDir, "ballOnly", singleTarget=True)
+
+
+def selectTrackedData(datasetDir, mediaStoreDir, taskId, *, singleTarget=False):
     root, store = Path(datasetDir).resolve(), Path(mediaStoreDir).resolve()
     verifyView(root)
     plan, manifest = readJson(root / "plan.json"), readJson(root / "manifest.json")
-    task = next((task for task in plan["recipe"]["tasks"] if task["taskId"] == "ballOnly"), None)
-    if task is None or task["classes"] != ["ball"]:
-        raise ValueError("Tracking requires a real ballOnly shared task view.")
-    rows = [row for row in manifest["samples"] if row["taskId"] == "ballOnly" and row["split"] == "validation"]
+    task = next((task for task in plan["recipe"]["tasks"] if task["taskId"] == taskId), None)
+    if task is None or (taskId == "ballOnly" and task["classes"] != ["ball"]):
+        raise ValueError(f"Tracking requires a real {taskId} shared task view.")
+    if taskId == "courtPoints":
+        raise ValueError("Static court landmarks are not tracked.")
+    rows = [row for row in manifest["samples"] if row["taskId"] == taskId and row["split"] == "validation"]
     if not rows or any(row["origin"] != "own" for row in rows):
         raise ValueError("Tracking requires nonempty own validation data.")
     samples = {sample["recordId"]: sample for sample in plan["samples"]}
@@ -29,8 +35,8 @@ def selectTrackingData(datasetDir, mediaStoreDir):
     for row, reference in zip(rows, references, strict=True):
         sample = samples[row["recordId"]]
         interval = intervals[sample["intervalId"]]
-        if not interval["startFrame"] <= row["frameIndex"] <= interval["endFrame"] or len(reference["targets"]) > 1:
-            raise ValueError("Ball tracking reference exceeds reviewed bounds or has multiple balls.")
+        if not interval["startFrame"] <= row["frameIndex"] <= interval["endFrame"] or (singleTarget and len(reference["targets"]) > 1):
+            raise ValueError("Tracking reference exceeds reviewed bounds or has multiple targets.")
         key = (row["matchId"], row["sourceId"], sample["intervalId"])
         if previous is None or key != previous[0] or row["frameIndex"] != previous[1] + 1:
             segments.append({"segmentId": f"{row['sourceId']}:{sample['intervalId']}:{row['frameIndex']}",
@@ -47,14 +53,15 @@ def selectTrackingData(datasetDir, mediaStoreDir):
         images.append(str(image))
         previous = key, row["frameIndex"]
     excluded = [{"recordId": s["recordId"], "matchId": s["matchId"], "frameIndex": s["frameIndex"],
-                 "reasons": s["tasks"]["ballOnly"]["reasons"]} for s in plan["samples"]
+                 "reasons": s["tasks"][taskId]["reasons"]} for s in plan["samples"]
                 if s["origin"] == "own" and plan["frozenSplit"]["assignments"].get(s["matchId"]) == "validation"
-                and not s["tasks"]["ballOnly"]["eligible"]]
-    selection = {"references": references, "segments": segments, "excluded": excluded,
+                and not s["tasks"][taskId]["eligible"]]
+    selection = {"taskId": taskId, "classes": task["classes"], "references": references, "segments": segments, "excluded": excluded,
                  "datasetContractSha256": hashFile(root / "contract.json"),
                  "metadataEvidence": [{"path": name, "sha256": hashFile(root / name)}
                                       for name in ("plan.json", "manifest.json")],
                  "frameCount": len(references), "positiveFrames": sum(bool(r["targets"]) for r in references),
-                 "negativeFrames": sum(not r["targets"] for r in references), "testEvaluated": False}
+                 "negativeFrames": sum(not r["targets"] for r in references),
+                 "targetCount": sum(len(r["targets"]) for r in references), "testEvaluated": False}
     selection["selectionId"] = hashJson(selection)
     return selection, images

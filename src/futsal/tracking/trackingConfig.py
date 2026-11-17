@@ -1,4 +1,5 @@
 import math
+import re
 from pathlib import Path
 
 from futsal.inventory.catalog import readYaml
@@ -46,3 +47,18 @@ def loadTrackingRuns(path):
     if len(set(resolved.values())) != len(resolved):
         raise ValueError("Each model size requires a distinct training run.")
     return resolved
+
+
+def resolveTrackedRuns(specs):
+    """Map each `label=path` or `path` spec to a resolved run directory, labelled by its folder name by default."""
+    runs = {}
+    for spec in specs:
+        label, _, location = str(spec).rpartition("=")
+        path = Path(location).resolve()
+        label = label or path.name
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", label) or label in runs:
+            raise ValueError(f"Run label must be unique and filename-safe: {label!r}; use label=path.")
+        runs[label] = path
+    if not runs or len(set(runs.values())) != len(runs):
+        raise ValueError("Tracking requires at least one run and distinct run directories.")
+    return runs
