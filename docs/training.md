@@ -238,6 +238,15 @@ uses native validation box mAP50:95, including artificial point boxes; native-po
 localization diagnostics remain separate from checkpoint selection. CUDA
 determinism sets CUBLAS_WORKSPACE_CONFIG before loading the backend.
 
+Schema 2 profiles may declare two optional fields. `augmentation` names a
+validated policy. That policy alone decides which augmentation keys may be
+nonzero, and which record origins stay unaugmented. `checkpointSelection` selects
+`best.pt` and early stopping by macro native point success instead of box
+mAP50:95. Both fields are currently limited to independent courtPoints training.
+Profiles without them keep all augmentations disabled and box-AP selection.
+Details, the side-swapping horizontal flip and the YOLO26m ablation are in
+[courtAugmentation.md](courtAugmentation.md).
+
 ## Seeds and interrupted attempts
 
 `train --seed 43` overrides only the seed. Both the original profile and resolved
