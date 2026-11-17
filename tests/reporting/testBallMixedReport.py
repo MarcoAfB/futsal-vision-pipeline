@@ -1,3 +1,5 @@
+import pytest
+
 from futsal.datasets.datasetFiles import readJson, verifyEvidence, writeJson
 from futsal.inventory.catalog import hashFile
 from futsal.reporting.researchReport import mixedSourceMarkdown, renderTrainingReport
@@ -5,10 +7,11 @@ from futsal.training.trainingConfig import loadTrainingConfig
 from futsal.training.trainingData import selectTrainingData
 
 
-def testMixedCompositionShowsSourcesAndValidNegativesWithoutModelImports(ballMixedView, tmp_path, monkeypatch):
+@pytest.mark.parametrize("viewFixture", ["ballMixedView", "playerMixedView"])
+def testMixedCompositionShowsSourcesAndValidNegativesWithoutModelImports(request, tmp_path, monkeypatch, viewFixture):
     import builtins
 
-    view, _, profile = ballMixedView
+    view, _, profile = request.getfixturevalue(viewFixture)
     config = loadTrainingConfig(profile, readJson(view / "plan.json")["recipe"])
     selection = selectTrainingData(view, config)
     runDir = tmp_path / "failed"
