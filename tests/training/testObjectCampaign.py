@@ -16,13 +16,16 @@ from futsal.training.objectCampaign import (
 from futsal.training.trainingConfig import stageParameters
 from futsal.training.trainingRun import fileEvidence
 
+mixedViews = {"ballMixed": "ballMixedView", "playerMixed": "playerMixedView"}
 
-@pytest.fixture(params=["objects", "players", "ballMixed"])
+
+@pytest.fixture(params=["objects", "players", "ballMixed", "playerMixed"])
 def campaignHarness(request, tmp_path, monkeypatch):
     from futsal.training.modelWeights import prepareWeights
 
     variant = request.param
-    view, store, configFile = request.getfixturevalue({"objects": "objectCurriculumView", "players": "playerCurriculumView", "ballMixed": "ballMixedView"}[variant])
+    view, store, configFile = request.getfixturevalue(
+        {"objects": "objectCurriculumView", "players": "playerCurriculumView", **mixedViews}[variant])
     config = yaml.safe_load(configFile.read_text())
     config.update(device="cpu", evaluationDevice="cpu")
     monkeypatch.setattr("futsal.training.modelWeights.downloadWeights", lambda url, path: path.write_bytes(b"fixture"))
@@ -187,7 +190,8 @@ def testCampaignResumeKeepsIdentityAndDoesNotDuplicateTraining(campaignHarness, 
         trainCampaign(**options, resume=True)
 
 
-@pytest.mark.parametrize("viewFixture,variant", [("objectCurriculumView", "objects"), ("playerCurriculumView", "players"), ("ballMixedView", "ballMixed")])
+@pytest.mark.parametrize("viewFixture,variant", [("objectCurriculumView", "objects"), ("playerCurriculumView", "players"),
+                                                 ("ballMixedView", "ballMixed"), ("playerMixedView", "playerMixed")])
 def testCampaignIdentityChecksVariantAgainstNativeTaskClasses(request, tmp_path, monkeypatch, viewFixture, variant):
     from types import SimpleNamespace
 
@@ -204,14 +208,54 @@ def testCampaignIdentityChecksVariantAgainstNativeTaskClasses(request, tmp_path,
                  tmp_path / "work", tmp_path / "campaign"]
     identity = campaignIdentity(*arguments, curriculum=variant)
     assert identity["curriculum"] == variant
-    if variant == "ballMixed":
+    mixedTask = {"ballMixed": "ballOnly", "playerMixed": "playerOnly"}.get(variant)
+    if mixedTask:
         assert identity["trainingMode"] == "naturalMixedSources"
         monkeypatch.setattr("futsal.training.trainingData.selectTrainingData", lambda *a:
-                            {"tasks": {"ballOnly": {"training": [{"origin": "own"}]}}})
+                            {"tasks": {mixedTask: {"training": [{"origin": "own"}]}}})
         with pytest.raises(ValueError, match="both public and own"):
             campaignIdentity(*arguments, curriculum=variant)
+    else:
+        assert "trainingMode" not in identity
     with pytest.raises(ValueError):
         campaignIdentity(*arguments, curriculum="players" if variant == "objects" else "objects")
+
+
+@pytest.mark.parametrize("viewFixture,wrong", [(view, wrong) for variant, view in mixedViews.items()
+                                               for wrong in mixedViews if wrong != variant])
+def testMixedCampaignRefusesTheOtherMixedView(request, tmp_path, monkeypatch, viewFixture, wrong):
+    from types import SimpleNamespace
+
+    from futsal.training.modelWeights import prepareWeights
+    from futsal.training.objectCampaign import campaignIdentity
+
+    view, store, profile = request.getfixturevalue(viewFixture)
+    monkeypatch.setattr("futsal.training.objectCampaign.subprocess.run", lambda command, **kw:
+                        SimpleNamespace(stdout="" if "status" in command else "fixtureCommit"))
+    monkeypatch.setattr("futsal.training.modelWeights.downloadWeights", lambda url, path: path.write_bytes(b"fixture"))
+    prepareWeights("n", tmp_path / "weights/yolo26n")
+    with pytest.raises(ValueError, match="matching"):
+        campaignIdentity(Path.cwd(), view, store, profile, Path("configs/evaluation/researchValidation.yaml"), ["n"],
+                         tmp_path / "weights", tmp_path / "work", tmp_path / "campaign", curriculum=wrong)
+
+
+def testUncommittedCheckoutIsRefusedUnlessExplicitlyRecorded(playerMixedView, tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from futsal.training.modelWeights import prepareWeights
+    from futsal.training.objectCampaign import campaignIdentity
+
+    view, store, profile = playerMixedView
+    monkeypatch.setattr("futsal.training.objectCampaign.subprocess.run", lambda command, **kw:
+                        SimpleNamespace(stdout=" M src/futsal/datasets/playerMixed.py" if "status" in command else "fixtureCommit"))
+    monkeypatch.setattr("futsal.training.modelWeights.downloadWeights", lambda url, path: path.write_bytes(b"fixture"))
+    prepareWeights("n", tmp_path / "weights/yolo26n")
+    arguments = [Path.cwd(), view, store, profile, Path("configs/evaluation/researchValidation.yaml"), ["n"],
+                 tmp_path / "weights", tmp_path / "work", tmp_path / "campaign"]
+    with pytest.raises(ValueError, match="clean frozen checkout"):
+        campaignIdentity(*arguments, curriculum="playerMixed")
+    identity = campaignIdentity(*arguments, curriculum="playerMixed", allowUncommitted=True)
+    assert identity["uncommittedCheckout"] == ["M src/futsal/datasets/playerMixed.py"]
 
 
 def testWorkersUseIsolatedOfflineProcesses(tmp_path, monkeypatch):

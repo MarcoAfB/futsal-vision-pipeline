@@ -215,7 +215,7 @@ def testSizeWeightMismatchFailsBeforeCreatingRun(trainingBundle, localWeights, t
 
 @pytest.mark.parametrize("viewFixture,failedIndex", [
     (view, index) for view in ("objectCurriculumView", "playerCurriculumView") for index in (0, 1, 2)
-] + [("ballMixedView", 0)])
+] + [("ballMixedView", 0), ("playerMixedView", 0)])
 def testMemoryRetryChangesOnlyFailedBatchAndReusesPrefix(request, localWeights,
                                                         fakeTraining, tmp_path, monkeypatch, failedIndex, viewFixture):
     import copy
@@ -269,7 +269,8 @@ def testMemoryRetryChangesOnlyFailedBatchAndReusesPrefix(request, localWeights,
 @pytest.mark.parametrize("viewFixture,mutation", [
     (view, mutation) for view in ("objectCurriculumView", "playerCurriculumView")
     for mutation in ("seed", "lr", "futureBatch", "completedBatch", "weights", "nonMemory", "code")
-] + [("ballMixedView", mutation) for mutation in ("seed", "lr", "weights", "nonMemory", "code")])
+] + [(view, mutation) for view in ("ballMixedView", "playerMixedView")
+     for mutation in ("seed", "lr", "weights", "nonMemory", "code")])
 def testMemoryRetryRejectsUnrelatedChanges(request, localWeights, fakeTraining,
                                            tmp_path, monkeypatch, mutation, viewFixture):
     import yaml

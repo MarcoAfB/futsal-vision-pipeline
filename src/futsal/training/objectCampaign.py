@@ -140,8 +140,16 @@ def worker(payload):
     return 0 if completed or diagnostic else 1
 
 
+def validateMixedRecipe(curriculum, recipe, catalog):
+    if curriculum == "ballMixed":
+        from futsal.datasets.ballMixed import validateBallMixedRecipe as validate
+    else:
+        from futsal.datasets.playerMixed import validatePlayerMixedRecipe as validate
+    validate(recipe, catalog)
+
+
 def campaignIdentity(project, dataset, store, configPath, evaluationConfig, sizes, weightsRoot, workDir, campaignDir,
-                     curriculum="objects"):
+                     curriculum="objects", allowUncommitted=False):
     from futsal.datasets.sharedViews import verifyView
     from futsal.training.modelWeights import verifyWeights
     from futsal.training.trainingData import selectTrainingData
@@ -149,12 +157,14 @@ def campaignIdentity(project, dataset, store, configPath, evaluationConfig, size
     def git(*arguments):
         return subprocess.run(["git", *arguments], cwd=project, capture_output=True, text=True, check=True).stdout.strip()
 
-    if git("status", "--porcelain"):
+    checkoutStatus = git("status", "--porcelain")
+    if checkoutStatus and not allowUncommitted:
         raise ValueError("Campaign requires a clean frozen checkout.")
     verification = verifyView(dataset, store)
     recipe = readJson(dataset / "plan.json")["recipe"]
     config = loadTrainingConfig(configPath, recipe)
-    expected = trainingVariant(curriculum)["tasks"]
+    variant = trainingVariant(curriculum)
+    expected = variant["tasks"]
     active = {task["taskId"]: task["classes"] for task in recipe["tasks"] if task["taskId"] in recipe["curriculum"]}
     if config["purpose"] != "scientificTraining" or config["seed"] != 42 or config["device"] == "cpu" or (
         [stage["taskId"] for stage in config["stages"]] != list(expected) or recipe["curriculum"] != list(expected)
@@ -165,12 +175,11 @@ def campaignIdentity(project, dataset, store, configPath, evaluationConfig, size
     if not sizes or len(sizes) != len(set(sizes)):
         raise ValueError("Campaign model sizes must be a nonempty unique sequence.")
     selection = selectTrainingData(dataset, config)
-    if curriculum == "ballMixed":
-        from futsal.datasets.ballMixed import validateBallMixedRecipe
-
-        validateBallMixedRecipe(recipe, readJson(dataset / "plan.json")["catalog"]["data"])
-        if {row["origin"] for row in selection["tasks"]["ballOnly"]["training"]} != {"own", "public"}:
-            raise ValueError("Mixed ball campaign requires both public and own training records.")
+    mode = variant.get("trainingMode")
+    if mode == "naturalMixedSources":
+        validateMixedRecipe(curriculum, recipe, readJson(dataset / "plan.json")["catalog"]["data"])
+        if {row["origin"] for row in selection["tasks"][next(iter(expected))]["training"]} != {"own", "public"}:
+            raise ValueError("Mixed-source campaign requires both public and own training records.")
     files = [*sorted((project / "src").rglob("*.py")), *sorted((project / "scripts").glob("*.py")),
              project / "pyproject.toml", project / "uv.lock", configPath, evaluationConfig]
     identity = {"curriculum": curriculum, "commit": git("rev-parse", "HEAD"), "files": {str(path): hashFile(path) for path in files},
@@ -179,13 +188,16 @@ def campaignIdentity(project, dataset, store, configPath, evaluationConfig, size
         "configuration": config, "modelSizes": sizes, "workDir": str(workDir), "campaignDir": str(campaignDir),
         "weights": {size: {"path": str(weightsRoot / f"yolo26{size}" / f"yolo26{size}.pt"),
             "metadata": verifyWeights(weightsRoot / f"yolo26{size}" / f"yolo26{size}.pt", size)} for size in sizes}}
-    if curriculum == "ballMixed":
-        identity["trainingMode"] = "naturalMixedSources"
+    if mode:
+        identity["trainingMode"] = mode
+    if checkoutStatus:
+        identity["uncommittedCheckout"] = checkoutStatus.splitlines()
     return identity
 
 
 def trainCampaign(project, script, *, datasetDir, mediaStoreDir, workDir, campaignDir, configPath,
-                  evaluationConfig, weightsRoot, modelSizes, resume=False, curriculum="objects"):
+                  evaluationConfig, weightsRoot, modelSizes, resume=False, curriculum="objects",
+                  allowUncommitted=False):
     from futsal.datasets.mediaStore import readBindings
 
     trainingVariant(curriculum)
@@ -203,7 +215,7 @@ def trainCampaign(project, script, *, datasetDir, mediaStoreDir, workDir, campai
             raise ValueError("Campaign output roots must be directories.")
     with campaignLock(directory):
         identity = campaignIdentity(project, dataset, store, configPath, evaluationConfig, modelSizes, weightsRoot,
-                                    work, directory, curriculum)
+                                    work, directory, curriculum, allowUncommitted)
         statePath = directory / "campaign.json"
         if statePath.exists():
             if not resume:
