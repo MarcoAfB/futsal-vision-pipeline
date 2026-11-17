@@ -4,7 +4,7 @@ The `tracking` domain owns ball-tracker configuration, shared validation sequenc
 selection, training/checkpoint validation and native tracking workers. Evaluation
 orchestrates isolated comparison conditions and operational temporal metrics;
 reporting renders sealed evidence without a model backend. See
-[ball tracking](ballTracking.md) for the CLI and evidence contracts.
+[ball tracking](ballTracking.md) (generic models: [tracking](tracking.md)) for the CLI and evidence contracts.
 
 `src` is the source directory; `futsal` is the installable Python package. Hatch
 includes `src/futsal` and its subpackages in the wheel. The package name remains

@@ -1,5 +1,8 @@
 # Ball tracking comparison
 
+For any other trained detector (generic player, ball + player, detailed classes) see
+[tracking.md](tracking.md); `trackRun` generalizes this workflow with multi-object scoring.
+
 `compareBallTrackers` compares completed standalone ball-only YOLO26 runs with
 native trackers on the complete eligible own validation cohort. With all five
 model sizes and the default six trackers, it evaluates 35 conditions, including
