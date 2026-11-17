@@ -1,0 +1,18 @@
+schemaVersion: 1
+# Generic player detections at or above this confidence are cropped; it is also
+# the operational confidence used when the assignment is scored.
+detectionConfidence: 0.25
+# Torso window as fractions of the detection box height and width.
+torsoTop: 0.15
+torsoBottom: 0.55
+sideMargin: 0.2
+# Crops overlapping another detection above this IoU are classified but excluded
+# from fitting the per-match clusters.
+overlapIouMax: 0.3
+minCropPixels: 8
+featureKinds: [siglip, colorHistogram]
+siglipModel: google/siglip-base-patch16-224
+# Verify on the server before the first run; the run records the resolved files.
+siglipRevision: 7fd15f0689c79d79e38b1c2e2e2370a7bf2761ed
+batchSize: 64
+histogramBins: [16, 4, 4]
