@@ -89,6 +89,50 @@ def ballMixedView(preparedSources, tmp_path):
 
 
 @pytest.fixture
+def playerMixedView(preparedSources, tmp_path):
+    from futsal.datasets.datasetExport import prepareDataset
+    from futsal.datasets.datasetPlan import buildDatasetPlan, writeDatasetPlan
+    from futsal.datasets.mediaRegistration import registerMedia
+    from futsal.datasets.objectCurriculum import prepareObjectCurriculum
+
+    dataRoot, sourceConfig, _ = preparedSources
+    labels = yaml.safe_load(Path("configs/labelMap.yaml").read_text(encoding="utf-8"))
+    athletes = {"outfieldPlayerTeamA", "outfieldPlayerTeamB", "goalkeeperTeamA", "goalkeeperTeamB"}
+    athleteLabels = {entry["sourceLabel"] for entry in labels["labelMaps"]["ownCvat"]["entries"]
+                     if entry.get("targetClass") in athletes}
+    for path in dataRoot.glob("video*.xml"):
+        tree = ElementTree.parse(path)
+        for track in tree.getroot().findall("track"):
+            if track.attrib["label"] not in athleteLabels:
+                continue
+            offset = int(track.attrib["id"]) * 3
+            for box in track.findall("box"):
+                box.set("xtl", str(20 + offset))
+                box.set("xbr", str(30 + offset))
+            track.remove(track.find("box[@frame='1']"))
+        tree.write(path, encoding="utf-8")
+    negative = dataRoot / "futsal4400/negative.jpg"
+    assert cv2.imwrite(str(negative), np.full((64, 96, 3), 200, dtype=np.uint8))
+    negative.with_suffix(".txt").write_text("0 0.3 0.5 0.1 0.1\n")
+    parent = buildDatasetPlan(sourceConfig, dataRoot)
+    native = writeDatasetPlan(parent, tmp_path / "playerNative", dataRoot)
+    bundle = tmp_path / "playerParent"
+    prepareDataset(native, dataRoot, bundle, progress=lambda message: None)
+    recipe = yaml.safe_load(Path("configs/playerMixed.yaml").read_text())
+    recipe.pop("splitPath")
+    recipe["tasks"][-1]["trainingSources"] = ["own", *[s["sourceId"] for s in parent["catalog"]["data"]["publicSources"]]]
+    recipePath = sourceConfig.with_name("playerMixed.yaml")
+    recipePath.write_text(yaml.safe_dump(recipe))
+    store, view = tmp_path / "playerMixedStore", tmp_path / "playerMixedView"
+    registerMedia(store, bundle)
+    prepareObjectCurriculum(bundle, recipePath, store, tmp_path / "playerMixedPlan", view,
+                            curriculum="playerMixed", progress=lambda message: None)
+    configPath = tmp_path / "playerMixedTraining.yaml"
+    configPath.write_bytes(Path("configs/training/playerMixed.yaml").read_bytes())
+    return view, store, configPath
+
+
+@pytest.fixture
 def trackingView(trainingBundle, preparedSources, tmp_path):
     from futsal.datasets.mediaRegistration import registerMedia
     from futsal.datasets.sharedViews import prepareView
