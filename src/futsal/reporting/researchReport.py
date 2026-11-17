@@ -384,6 +384,10 @@ def renderReport(evaluationDir, outputDir=None):
         from futsal.reporting.ballTrackingReport import renderBallTrackingReport
 
         return renderBallTrackingReport(source, outputDir)
+    if state.get("kind") == "trackingComparison":
+        from futsal.reporting.trackingReport import renderTrackingReport
+
+        return renderTrackingReport(source, outputDir)
     if state.get("kind") == "courtTrainingComparison":
         from futsal.reporting.courtComparisonReport import renderCourtComparison
 

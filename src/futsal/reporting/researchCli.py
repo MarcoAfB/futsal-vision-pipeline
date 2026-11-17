@@ -14,6 +14,15 @@ def addResearchCommands(commands):
     tracking.add_argument("--device", default="cpu")
     tracking.add_argument("--resumeFrom", type=Path)
 
+    tracked = commands.add_parser("trackRun", help="Run native trackers on the own validation cohort of any trained detector.")
+    tracked.add_argument("--runDir", action="append", required=True, metavar="[LABEL=]PATH",
+                         help="Completed training run; repeat for models of the same final task.")
+    for name in ("datasetDir", "mediaStoreDir", "outputDir"):
+        tracked.add_argument(f"--{name}", type=Path, required=True)
+    tracked.add_argument("--config", type=Path, default=Path("configs/evaluation/tracking.yaml"))
+    tracked.add_argument("--device", default="cpu")
+    tracked.add_argument("--resumeFrom", type=Path)
+
     homography = commands.add_parser("evaluateHomography",
                                      help="Evaluate court homographies from sealed validation predictions.")
     homography.add_argument("--courtEvaluationDir", type=Path, required=True)
@@ -79,6 +88,16 @@ def handleResearchCommand(arguments):
             resumeFrom=arguments.resumeFrom, progress=lambda message: print(message, flush=True))
         path = renderReport(arguments.outputDir)
         print(f"Ball tracking comparison: {result['status']}; report: {path}")
+        return 0 if result["status"] == "completed" else 1
+
+    if arguments.command == "trackRun":
+        from futsal.evaluation.trackingRun import trackRuns
+
+        result = trackRuns(arguments.runDir, arguments.datasetDir, arguments.mediaStoreDir, arguments.outputDir,
+            configPath=arguments.config, device=arguments.device, resumeFrom=arguments.resumeFrom,
+            progress=lambda message: print(message, flush=True))
+        path = renderReport(arguments.outputDir)
+        print(f"Tracking comparison: {result['status']}; report: {path}")
         return 0 if result["status"] == "completed" else 1
 
     if arguments.command == "evaluateHomography":

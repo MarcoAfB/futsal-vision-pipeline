@@ -138,7 +138,7 @@ def main(argv: list[str] | None = None) -> int:
         except (OSError, ValueError, KeyError) as error:
             parser.exit(2, f"Projection could not complete: {error}\n")
     if arguments.command in {"evaluateRun", "reportRun", "evaluateConfiguration", "compareConfigurations", "compareCourtTraining", "compareBallTrackers", "evaluateHomography",
-                            "extractTeamFeatures", "evaluateTeams"}:
+                            "extractTeamFeatures", "evaluateTeams", "trackRun"}:
         from futsal.reporting.researchCli import handleResearchCommand
 
         try:
