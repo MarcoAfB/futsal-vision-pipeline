@@ -14,6 +14,17 @@ def addResearchCommands(commands):
     tracking.add_argument("--device", default="cpu")
     tracking.add_argument("--resumeFrom", type=Path)
 
+    homography = commands.add_parser("evaluateHomography",
+                                     help="Evaluate court homographies from sealed validation predictions.")
+    homography.add_argument("--courtEvaluationDir", type=Path, required=True)
+    homography.add_argument("--outputDir", type=Path, required=True)
+    homography.add_argument("--playerEvaluationDir", type=Path)
+    homography.add_argument("--mediaStoreDir", type=Path, help="Render overlay examples from validation images.")
+    homography.add_argument("--config", type=Path, default=Path("configs/evaluation/homography.yaml"))
+    homography.add_argument("--courtConfig", type=Path, default=Path("configs/courtGeometry.yaml"))
+    homography.add_argument("--courtLength", type=float, help="Court length in metres for every match.")
+    homography.add_argument("--courtWidth", type=float, help="Court width in metres for every match.")
+
     courtComparison = commands.add_parser("compareCourtTraining", help="Compare real-only and supplemented court training.")
     for name in ("baselineEvaluationDir", "candidateEvaluationDir", "outputDir"):
         courtComparison.add_argument(f"--{name}", type=Path, required=True)
@@ -57,6 +68,17 @@ def handleResearchCommand(arguments):
         print(f"Ball tracking comparison: {result['status']}; report: {path}")
         return 0 if result["status"] == "completed" else 1
 
+    if arguments.command == "evaluateHomography":
+        from futsal.evaluation.homographyRun import evaluateHomography
+
+        result = evaluateHomography(arguments.courtEvaluationDir, arguments.outputDir, arguments.config,
+                                    arguments.courtConfig, playerEvaluationDir=arguments.playerEvaluationDir,
+                                    courtLength=arguments.courtLength, courtWidth=arguments.courtWidth,
+                                    mediaStoreDir=arguments.mediaStoreDir,
+                                    progress=lambda message: print(message, flush=True))
+        path = renderReport(arguments.outputDir)
+        print(f"Homography evaluation: {result['status']}; report: {path}")
+        return 0 if result["status"] == "completed" else 1
     if arguments.command == "compareCourtTraining":
         from futsal.evaluation.courtComparison import compareCourtTraining
 
