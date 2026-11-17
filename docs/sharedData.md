@@ -126,6 +126,8 @@ completed collection does not invalidate another run's pinned input selection.
 
 The [mixed ball workflow](ballMixed.md) uses the same shared store and delta
 transport for a single ball task trained jointly on public and own records.
+The [mixed player workflow](playerMixed.md) does the same for one generic
+player task.
 
 The [player curriculum](playerCurriculum.md) reuses these contracts and transport
 commands for player-only 1/2/4 tasks, including only newly eligible missing assets.
