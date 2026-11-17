@@ -97,6 +97,10 @@ def prepareObjectCurriculum(sourceDatasetDir, configPath, mediaStoreDir, planDir
         from futsal.datasets.playerMixed import buildPlayerMixedPlan
 
         builder = buildPlayerMixedPlan
+    elif curriculum == "ballPlayerMixed":
+        from futsal.datasets.ballPlayerMixed import buildBallPlayerMixedPlan
+
+        builder = buildBallPlayerMixedPlan
     plan = builder(loadDatasetPlan(source / "plan.json"), loadRecipe(configPath))
     writeDatasetPlan(plan, planDir, source, protectedPaths=protected)
     registration = registerMedia(store, planDir, progress=progress)

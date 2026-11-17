@@ -14,7 +14,10 @@ def trainingVariant(name):
         return {"stem": "ballMixed", "trainingMode": "naturalMixedSources", "tasks": {"ballOnly": ["ball"]}}
     if name == "playerMixed":
         return {"stem": "playerMixed", "trainingMode": "naturalMixedSources", "tasks": {"playerOnly": ["player"]}}
-    raise ValueError("training variant must be objects, players, ballMixed or playerMixed.")
+    if name == "ballPlayerMixed":
+        return {"stem": "ballPlayerMixed", "trainingMode": "naturalMixedSources",
+                "tasks": {"ballPlayer": ["ball", "player"]}}
+    raise ValueError("training variant must be objects, players, ballMixed, playerMixed or ballPlayerMixed.")
 
 
 def curriculumVariant(name):
