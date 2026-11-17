@@ -35,7 +35,7 @@ def testIgnoringAthletesIsExplicitAndDoesNotChangeSourceIndices():
     assert "missingOrAmbiguousLabel" in classifySample(sample, task, set())["reasons"]
 
 
-@pytest.mark.parametrize("name", ["curriculum", "objectCurriculum", "playerCurriculum", "sharedDetection"])
+@pytest.mark.parametrize("name", ["curriculum", "objectCurriculum", "playerCurriculum", "sharedDetection", "playerMixed"])
 def testOptionalIgnorePolicyDoesNotRewriteOlderRecipes(name):
     recipe = loadRecipe(f"configs/{name}.yaml")
     original = copy.deepcopy(recipe.data)

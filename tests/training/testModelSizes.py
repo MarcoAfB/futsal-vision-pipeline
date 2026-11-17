@@ -18,6 +18,8 @@ def testEveryTrainingProfileAcceptsEveryModelSize(tmp_path, profile, modelSize):
         recipePath = "configs/playerCurriculum.yaml"
     elif profile.stem == "ballMixed":
         recipePath = "configs/ballMixed.yaml"
+    elif profile.stem == "playerMixed":
+        recipePath = "configs/playerMixed.yaml"
     recipe = yaml.safe_load(Path(recipePath).read_text())
     config["modelSize"] = modelSize
     path = tmp_path / "profile.yaml"

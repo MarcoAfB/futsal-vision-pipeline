@@ -1,0 +1,33 @@
+schemaVersion: 1
+catalogPath: dataSources.yaml
+splitPath: splits.yaml
+curriculum: [playerOnly]
+coverageTask: unified25
+unsupportedValidationClasses: [lowerCornerSideB]
+rareClass: lowerCornerSideB
+pointBoxes:
+  widthFraction: 0.015625
+  heightFraction: 0.027777777777777776
+publicValidation:
+  basis: researcherConfirmation
+  confirmedOn: '2026-10-26'
+  checks:
+  - annotationCompletenessForSourceOntology
+  - overlapWithOwnRecordings
+  sources: [futsal4400, smartFutsal, futsalMot, futsalAnaliza, futsalDetect]
+tasks:
+- taskId: unified25
+  classes: canonical
+  trainingSources: [own]
+  classMap: identity
+- taskId: playerOnly
+  classes: [player]
+  trainingSources: [own, futsal4400, smartFutsal, futsalMot, futsalAnaliza, futsalDetect]
+  classMap:
+    player: player
+    outfieldPlayer: player
+    goalkeeper: player
+    outfieldPlayerTeamA: player
+    outfieldPlayerTeamB: player
+    goalkeeperTeamA: player
+    goalkeeperTeamB: player
