@@ -14,6 +14,7 @@ from futsal.datasets.datasetFiles import (
     writeJson,
 )
 from futsal.datasets.datasetVerify import verifyDataset
+from futsal.evaluation.evaluationData import buildReferences
 from futsal.inventory.catalog import hashFile
 from futsal.inventory.yoloInventory import scanFiles
 from futsal.reporting.report import atomicWrite
@@ -81,7 +82,7 @@ def verifyBundleUnchanged(datasetDir, contract, contractHash, *, mediaStoreDir=N
     return {"artifactCount": len(expected), "hashesVerified": True, "membershipVerified": True}
 
 
-def executeStages(config, selection, initialWeights, runDir, run, evidence, progress):
+def executeStages(config, selection, initialWeights, runDir, run, evidence, progress, plan):
     inputWeights = initialWeights
     for index, stage in enumerate(config["stages"], start=1):
         if index <= len(run["stages"]) and run["stages"][index - 1]["status"] == "completed":
@@ -97,7 +98,11 @@ def executeStages(config, selection, initialWeights, runDir, run, evidence, prog
         saveRun(runDir, run)
         progress(f"Training stage {index}/{len(config['stages'])}: {taskId}...")
         options = {"batchRecovery": "fixed"} if run.get("batchRecovery") == "fixed" else {}
-        result = trainStage(config, selection["tasks"][taskId], stage, inputWeights,
+        task = selection["tasks"][taskId]
+        if "checkpointSelection" in config:
+            options["pointReferences"] = buildReferences(plan, {"rows": task["validation"],
+                                                                "classes": task["classes"]})
+        result = trainStage(config, task, stage, inputWeights,
                             stageDir, runDir, evidence, **options)
         if hashFile(inputWeights) != state["inputWeights"]["sha256"]:
             raise ValueError("Input checkpoint changed during training.")
@@ -219,7 +224,8 @@ def runTraining(datasetDir, configPath, weightsPath, outputDir, progress=print, 
             run["inputEvidence"] = [fileEvidence(path, runDir) for path in sorted(inputs.iterdir())]
         saveRun(runDir, run)
         initializeBackend(runDir / "backend", config["numThreads"])
-        executeStages(config, selection, inputs / weightsPath.name, runDir, run, evidence, progress)
+        executeStages(config, selection, inputs / weightsPath.name, runDir, run, evidence, progress,
+                      readJson(datasetDir / "plan.json"))
         run["status"] = "completed"
     except (Exception, KeyboardInterrupt) as error:
         run["status"] = "interrupted" if isinstance(error, KeyboardInterrupt) else "failed"

@@ -186,8 +186,21 @@ def stageMarkdown(root, state, stage):
                 [[execution["requestedEpochs"], execution["completedEpochs"], execution["bestEpoch"],
                   execution["device"], execution["amp"], execution["peakCudaAllocatedBytes"] / 1024 ** 2
                   if execution["peakCudaAllocatedBytes"] is not None else None]])
-            lines += ["Checkpoint selection uses native validation box AP, including the derived boxes for landmarks. "
-                      "Point localization below is measured against the original native points.", ""]
+            if execution.get("selectionCriterion") == "nativeValidationPointSuccessMacro":
+                lines += ["Checkpoint selection and early stopping use macro native point success on validation, "
+                          "computed by the training validator; box AP of each epoch is retained in the training evidence. "
+                          "Point localization below is the sealed evaluation against the original native points.", ""]
+            else:
+                lines += ["Checkpoint selection uses native validation box AP, including the derived boxes for landmarks. "
+                          "Point localization below is measured against the original native points.", ""]
+            augmentation = execution.get("augmentation")
+            if augmentation and augmentation["policy"]:
+                values = ", ".join(f"{key} {value}" for key, value in augmentation["values"].items())
+                lines += [f"Training augmentation: policy {augmentation['policy']} ({values}); horizontal flips swap "
+                          f"mirrored landmark classes; {augmentation['exemptRecords']} of {augmentation['trainingRecords']} "
+                          f"training records ({', '.join(augmentation['exemptOrigins']) or 'none'}) are not augmented.", ""]
+            elif augmentation:
+                lines += ["Training augmentation: none.", ""]
     if (evidenceDir / "transferAudit.json").is_file():
         audit = readJson(evidenceDir / "transferAudit.json")
         optimizer = readJson(evidenceDir / "optimizer.json")

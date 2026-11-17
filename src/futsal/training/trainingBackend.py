@@ -9,7 +9,7 @@ from futsal.datasets.datasetFiles import verifyEvidence, writeJson
 from futsal.inventory.catalog import hashFile, readYaml
 from futsal.training.checkpointTransfer import classificationKeys, loadAudited
 from futsal.training.memoryRecovery import requireFixedBatch
-from futsal.training.trainingConfig import stageParameters
+from futsal.training.trainingConfig import checkpointSelectionCriterion, stageParameters
 from futsal.training.trainingExposure import EpochExposure, verifyNaturalSampling
 
 
@@ -81,7 +81,8 @@ def validationMetrics(metrics, names, support, purpose="technicalSmoke"):
             "aggregate": aggregate, "perClass": perClass}
 
 
-def trainStage(config, task, stage, inputWeights, stageDir, runDir, runtimeEvidence, *, batchRecovery="native"):
+def trainStage(config, task, stage, inputWeights, stageDir, runDir, runtimeEvidence, *, batchRecovery="native",
+               pointReferences=None):
     from ultralytics.utils import LOGGER
 
     logDir = Path(runDir) / "logs"
@@ -90,13 +91,14 @@ def trainStage(config, task, stage, inputWeights, stageDir, runDir, runtimeEvide
     LOGGER.addHandler(handler)
     try:
         return trainNativeStage(config, task, stage, inputWeights, stageDir, runDir, runtimeEvidence,
-                                batchRecovery=batchRecovery)
+                                batchRecovery=batchRecovery, pointReferences=pointReferences)
     finally:
         LOGGER.removeHandler(handler)
         handler.close()
 
 
-def trainNativeStage(config, task, stage, inputWeights, stageDir, runDir, runtimeEvidence, *, batchRecovery="native"):
+def trainNativeStage(config, task, stage, inputWeights, stageDir, runDir, runtimeEvidence, *, batchRecovery="native",
+                     pointReferences=None):
     import torch
     from ultralytics.models.yolo.detect import DetectionTrainer
     from ultralytics.nn.tasks import load_checkpoint
@@ -105,8 +107,13 @@ def trainNativeStage(config, task, stage, inputWeights, stageDir, runDir, runtim
     stageDir, runDir = Path(stageDir), Path(runDir)
     mixed = {row["origin"] for row in task["training"]} == {"own", "public"}
     exposure = EpochExposure(task["training"]) if mixed else None
-    copiedRecords = {(runDir / "runtimeData" / row["imagePath"]).resolve(): row["recordId"] for row in task["training"]}
+    copiedRecords = {(runDir / "runtimeData" / row["imagePath"]).resolve(): row["recordId"]
+                     for split in ("training", "validation") for row in task[split]}
     sampling = None
+    augmentationAudit = None
+
+    def recordOf(label):
+        return label.get("recordId") or copiedRecords[Path(label["im_file"]).resolve()]
 
     class AuditedDetectionTrainer(DetectionTrainer):
         def preprocess_batch(self, batch):
@@ -127,8 +134,42 @@ def trainNativeStage(config, task, stage, inputWeights, stageDir, runDir, runtim
 
             from futsal.training.sharedRuntime import buildRuntimeDataset
 
+            nonlocal augmentationAudit
             stride = max(int(unwrap_model(self.model).stride.max()), 32)
-            return buildRuntimeDataset(self.args, runDir, stage["taskId"], self.data, batch, mode, stride)
+            dataset = buildRuntimeDataset(self.args, runDir, stage["taskId"], self.data, batch, mode, stride)
+            if mode == "train":
+                from futsal.training.augmentationRuntime import installTrainingTransforms
+
+                augmentationAudit = installTrainingTransforms(dataset, self.args, config, task, recordOf)
+                writeJson(stageDir / "augmentationAudit.json", augmentationAudit)
+            return dataset
+
+        def get_validator(self):
+            if pointReferences is None:
+                return super().get_validator()
+            from copy import copy
+
+            from futsal.training.pointSelection import pointSelectionValidator
+
+            files = {label["im_file"]: recordOf(label) for label in self.test_loader.dataset.labels}
+            if len(files) != len(self.test_loader.dataset.labels):
+                raise ValueError("Point selection requires one validation record per image file.")
+            return pointSelectionValidator(self.test_loader, self.save_dir, copy(self.args), self.callbacks,
+                                           pointReferences, task["classes"], config["checkpointSelection"],
+                                           files.__getitem__)
+
+        def validate(self):
+            if pointReferences is None:
+                return super().validate()
+            metrics = self.validator(self)
+            if metrics is None:
+                return None, None
+            boxFitness = float(metrics.pop("fitness"))
+            scores = self.validator.pointScores()
+            self.selectionScores = {"boxFitness": boxFitness, "pointSelection": scores}
+            if self.best_fitness is None or self.best_fitness < scores["macro"]:
+                self.best_fitness = scores["macro"]
+            return metrics, scores["macro"]
 
         def run_callbacks(self, event):
             for key, values in self.callbacks.items():
@@ -233,7 +274,7 @@ def trainNativeStage(config, task, stage, inputWeights, stageDir, runDir, runtim
         row = {"epoch": current.epoch + 1, "fitness": float(current.fitness),
                "bestFitness": float(current.best_fitness), "accumulate": current.accumulate,
                "learningRates": [group["lr"] for group in current.optimizer.param_groups],
-               **trainingCounts}
+               **trainingCounts, **getattr(current, "selectionScores", {})}
         if not math.isfinite(row["fitness"]) or not math.isfinite(row["bestFitness"]):
             raise ValueError("Training returned nonfinite checkpoint selection fitness.")
         history.append(row)
@@ -265,7 +306,8 @@ def trainNativeStage(config, task, stage, inputWeights, stageDir, runDir, runtim
                           "batchRecovery": batchRecovery,
                           **trainingCounts,
                           "bestEpoch": max(row["epoch"] for row in history if row["fitness"] == history[-1]["bestFitness"]),
-                          "selectionCriterion": "nativeValidationMap50To95", "elapsedSeconds": elapsed,
+                          "selectionCriterion": checkpointSelectionCriterion(config), "elapsedSeconds": elapsed,
+                          "augmentation": augmentationAudit,
                           "device": str(trainer.device), "amp": bool(trainer.amp),
                           "peakCudaAllocatedBytes": torch.cuda.max_memory_allocated(trainer.device)
                           if trainer.device.type == "cuda" else None,
