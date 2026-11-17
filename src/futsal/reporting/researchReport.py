@@ -388,6 +388,10 @@ def renderReport(evaluationDir, outputDir=None):
         from futsal.reporting.courtComparisonReport import renderCourtComparison
 
         return renderCourtComparison(source, outputDir)
+    if state.get("kind") == "homographyEvaluation":
+        from futsal.reporting.homographyReport import renderHomographyReport
+
+        return renderHomographyReport(source, outputDir)
     if state.get("kind") == "configurationComparison":
         from futsal.reporting.comparisonReport import renderComparisonReport
 
