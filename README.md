@@ -8,6 +8,10 @@ Train a single-class generic player detector on naturally mixed public/own data
 with the [mixed player workflow](docs/playerMixed.md). It reuses the mixed ball
 recipe, own validation and full shuffled epoch coverage audits.
 
+Train one ball and generic player detector on naturally mixed public/own data
+with the [mixed ball-player workflow](docs/ballPlayerMixed.md). It reuses the
+mixed recipe, own validation and full shuffled epoch coverage audits.
+
 The [player-only curriculum](docs/playerCurriculum.md) trains independent YOLO26
 n/s/m/l/x detectors through 1/2/4 athlete classes, without ball targets, using
 `--curriculum players`. It reuses shared images and stage-local memory recovery.
