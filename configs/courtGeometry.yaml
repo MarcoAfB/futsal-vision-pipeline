@@ -1,0 +1,17 @@
+schemaVersion: 1
+# Metric court used by homography estimation. Coordinates are metres with the
+# origin at upperCornerSideA, x toward Side B and y from the upper touchline
+# (farthest from the camera) to the lower touchline (nearest to the camera).
+defaultDimensions:
+  length: 40.0
+  width: 20.0
+# Optional measured dimensions per original match, for example:
+# match01: {length: 38.0, width: 19.0}
+matchDimensions: {}
+markings:
+  goalWidth: 3.0
+  penaltyDistance: 6.0
+  secondPenaltyDistance: 10.0
+  centerCircleRadius: 3.0
+  substitutionZoneOffset: 5.0
+  substitutionZoneLength: 5.0
