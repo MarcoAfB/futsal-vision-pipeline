@@ -1,0 +1,17 @@
+schemaVersion: 1
+trackers:
+- bytetrack
+- botsort
+- ocsort
+- deepocsort
+- fasttrack
+- tracktrack
+imgsz: 960
+batch: 1
+half: false
+seed: 42
+numThreads: 2
+detectorConfidence: 0.10
+operationalConfidence: 0.25
+operationalIou: 0.50
+maxDetections: 300
