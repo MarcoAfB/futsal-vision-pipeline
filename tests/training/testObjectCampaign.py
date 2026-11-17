@@ -16,10 +16,10 @@ from futsal.training.objectCampaign import (
 from futsal.training.trainingConfig import stageParameters
 from futsal.training.trainingRun import fileEvidence
 
-mixedViews = {"ballMixed": "ballMixedView", "playerMixed": "playerMixedView"}
+mixedViews = {"ballMixed": "ballMixedView", "playerMixed": "playerMixedView", "ballPlayerMixed": "ballPlayerMixedView"}
 
 
-@pytest.fixture(params=["objects", "players", "ballMixed", "playerMixed"])
+@pytest.fixture(params=["objects", "players", "ballMixed", "playerMixed", "ballPlayerMixed"])
 def campaignHarness(request, tmp_path, monkeypatch):
     from futsal.training.modelWeights import prepareWeights
 
@@ -191,7 +191,8 @@ def testCampaignResumeKeepsIdentityAndDoesNotDuplicateTraining(campaignHarness, 
 
 
 @pytest.mark.parametrize("viewFixture,variant", [("objectCurriculumView", "objects"), ("playerCurriculumView", "players"),
-                                                 ("ballMixedView", "ballMixed"), ("playerMixedView", "playerMixed")])
+                                                 ("ballMixedView", "ballMixed"), ("playerMixedView", "playerMixed"),
+                                                 ("ballPlayerMixedView", "ballPlayerMixed")])
 def testCampaignIdentityChecksVariantAgainstNativeTaskClasses(request, tmp_path, monkeypatch, viewFixture, variant):
     from types import SimpleNamespace
 
@@ -208,7 +209,7 @@ def testCampaignIdentityChecksVariantAgainstNativeTaskClasses(request, tmp_path,
                  tmp_path / "work", tmp_path / "campaign"]
     identity = campaignIdentity(*arguments, curriculum=variant)
     assert identity["curriculum"] == variant
-    mixedTask = {"ballMixed": "ballOnly", "playerMixed": "playerOnly"}.get(variant)
+    mixedTask = {"ballMixed": "ballOnly", "playerMixed": "playerOnly", "ballPlayerMixed": "ballPlayer"}.get(variant)
     if mixedTask:
         assert identity["trainingMode"] == "naturalMixedSources"
         monkeypatch.setattr("futsal.training.trainingData.selectTrainingData", lambda *a:

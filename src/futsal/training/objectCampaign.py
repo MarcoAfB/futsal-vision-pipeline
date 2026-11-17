@@ -143,8 +143,10 @@ def worker(payload):
 def validateMixedRecipe(curriculum, recipe, catalog):
     if curriculum == "ballMixed":
         from futsal.datasets.ballMixed import validateBallMixedRecipe as validate
-    else:
+    elif curriculum == "playerMixed":
         from futsal.datasets.playerMixed import validatePlayerMixedRecipe as validate
+    else:
+        from futsal.datasets.ballPlayerMixed import validateBallPlayerMixedRecipe as validate
     validate(recipe, catalog)
 
 
