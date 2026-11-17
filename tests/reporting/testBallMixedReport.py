@@ -7,7 +7,7 @@ from futsal.training.trainingConfig import loadTrainingConfig
 from futsal.training.trainingData import selectTrainingData
 
 
-@pytest.mark.parametrize("viewFixture", ["ballMixedView", "playerMixedView"])
+@pytest.mark.parametrize("viewFixture", ["ballMixedView", "playerMixedView", "ballPlayerMixedView"])
 def testMixedCompositionShowsSourcesAndValidNegativesWithoutModelImports(request, tmp_path, monkeypatch, viewFixture):
     import builtins
 
