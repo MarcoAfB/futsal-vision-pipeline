@@ -16,6 +16,8 @@ dependencies = [
 [project.optional-dependencies]
 reporting = ["matplotlib==3.11.2"]
 tracking = ["lap==0.5.12"]
+teamFeatures = ["transformers==4.57.1"]
+teamClustering = ["scikit-learn==1.7.2", "umap-learn==0.5.9.post2"]
 training = [
   "torch==2.9.1+cpu",
   "torchvision==0.24.1+cpu",
@@ -55,7 +57,7 @@ url = "https://download.pytorch.org/whl/cu126"
 explicit = true
 
 [dependency-groups]
-dev = ["pytest>=8.3,<10", "ruff>=0.11,<1"]
+dev = ["pytest>=8.3,<10", "ruff>=0.11,<1", "scikit-learn==1.7.2"]
 
 [project.scripts]
 futsal = "futsal.cli:main"
@@ -68,10 +70,11 @@ testpaths = ["tests"]
 python_files = ["test[A-Z]*.py"]
 python_functions = ["test[A-Z]*"]
 python_classes = ["Test[A-Z]*"]
-addopts = "-ra --strict-markers -m 'not trainingIntegration and not reportingIntegration'"
+addopts = "-ra --strict-markers -m 'not trainingIntegration and not reportingIntegration and not teamIntegration'"
 markers = [
   "trainingIntegration: optional native training tests without network access",
   "reportingIntegration: optional offline figure-rendering tests without a model backend",
+  "teamIntegration: optional team clustering tests that need the teamClustering extra",
 ]
 
 [tool.ruff]
