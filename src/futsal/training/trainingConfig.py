@@ -3,7 +3,14 @@ from pathlib import Path
 
 from futsal.datasets.recipes import activeTasks
 from futsal.inventory.catalog import readYaml
+from futsal.training.augmentationPolicy import (
+    augmentationKeys,
+    validateAugmentation,
+    validateAugmentationValues,
+)
 from futsal.training.modelWeights import validateModelSize
+
+optionalScientificFields = {"augmentation", "checkpointSelection"}
 
 
 def resolveTrainingConfig(config, *, seed=None, modelSize=None):
@@ -25,7 +32,8 @@ def loadTrainingConfig(path, recipe):
     scientific = data.get("schemaVersion") == 2
     if scientific:
         required |= {"evaluationDevice", "sourcePolicy"}
-    if set(data) != required or data["schemaVersion"] not in {1, 2}:
+    optional = optionalScientificFields if scientific else set()
+    if not required <= set(data) or set(data) - required - optional or data["schemaVersion"] not in {1, 2}:
         raise ValueError("Training configuration requires supported schemaVersion 1 or 2 fields.")
     validateModelSize(data["modelSize"])
     if not scientific and (data["purpose"] != "technicalSmoke" or data["device"] != "cpu"):
@@ -59,25 +67,47 @@ def loadTrainingConfig(path, recipe):
         allowed = {"lr0", "patience", "warmup_epochs", "batch"} if scientific else set()
         if not isinstance(overrides, dict) or set(overrides) - allowed:
             raise ValueError("Scientific stage parameters may override only lr0, patience, warmup_epochs and batch.")
-        validateParameters(stageParameters(data, stage), scientific)
     stageIds = [stage["taskId"] for stage in stages]
     activeIds = [task["taskId"] for task in activeTasks(recipe)]
     if len(stageIds) != len(set(stageIds)) or stageIds != [i for i in activeIds if i in stageIds]:
         raise ValueError("Stages must be unique active tasks in curriculum order.")
-    validateParameters(data["parameters"], scientific)
+    policy = None
+    if "augmentation" in data:
+        validateAugmentation(data["augmentation"], stageIds)
+        policy = data["augmentation"]["policy"]
+    if "checkpointSelection" in data:
+        validateCheckpointSelection(data["checkpointSelection"], stageIds)
+    for stage in stages:
+        validateParameters(stageParameters(data, stage), scientific, policy)
+    validateParameters(data["parameters"], scientific, policy)
     return data
+
+
+def validateCheckpointSelection(selection, stageIds):
+    if stageIds != ["courtPoints"]:
+        raise ValueError("Point-based checkpoint selection is supported only for independent courtPoints training.")
+    if not isinstance(selection, dict) or set(selection) != {"metric", "confidence", "tolerance"}:
+        raise ValueError("checkpointSelection requires exactly metric, confidence and tolerance.")
+    if selection["metric"] != "pointSuccessMacro":
+        raise ValueError("The only configurable checkpoint selection metric is pointSuccessMacro.")
+    for key in ("confidence", "tolerance"):
+        value = selection[key]
+        if type(value) not in {int, float} or not 0 < value < 1:
+            raise ValueError(f"checkpointSelection {key} must be in (0, 1).")
+
+
+def checkpointSelectionCriterion(config):
+    return ("nativeValidationPointSuccessMacro" if "checkpointSelection" in config
+            else "nativeValidationMap50To95")
 
 
 def stageParameters(config, stage):
     return {**config["parameters"], **stage.get("parameters", {})}
 
 
-def validateParameters(parameters, scientific=False):
+def validateParameters(parameters, scientific=False, policy=None):
     fixed = {"workers": 0, "optimizer": "SGD", "warmup_epochs": 0.0, "patience": 0,
              "amp": False, "deterministic": True, "cache": False, "plots": False, "save": True}
-    disabled = ("hsv_h", "hsv_s", "hsv_v", "degrees", "translate", "scale", "shear",
-                "perspective", "flipud", "fliplr", "mosaic", "mixup", "copy_paste", "cutmix",
-                "multi_scale", "close_mosaic")
     numeric = {"imgsz", "batch", "lr0", "momentum", "weight_decay"}
     if scientific:
         for key in ("workers", "warmup_epochs", "patience"):
@@ -85,13 +115,12 @@ def validateParameters(parameters, scientific=False):
         fixed["cos_lr"] = False
         numeric |= {"nbs", "lrf"}
     variable = {"workers", "warmup_epochs", "patience"} if scientific else set()
-    if not isinstance(parameters, dict) or set(parameters) != set(fixed) | set(disabled) | numeric | variable:
+    if not isinstance(parameters, dict) or set(parameters) != set(fixed) | set(augmentationKeys) | numeric | variable:
         raise ValueError("Unexpected or missing training parameters.")
     if any(parameters[key] != value or type(parameters[key]) is not type(value)
            for key, value in fixed.items()):
-        raise ValueError("Technical smoke requires deterministic FP32 training and isolated caches.")
-    if any(type(parameters[key]) not in {int, float} or parameters[key] != 0 for key in disabled):
-        raise ValueError("All data augmentations must be disabled for the technical smoke.")
+        raise ValueError("Training requires deterministic FP32 execution and isolated caches.")
+    validateAugmentationValues(parameters, policy)
     if any(type(parameters[key]) not in {int, float} or not math.isfinite(parameters[key])
            or parameters[key] <= 0 for key in numeric):
         raise ValueError("Training dimensions and optimizer values must be finite and positive.")
