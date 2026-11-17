@@ -1,0 +1,18 @@
+schemaVersion: 1
+# Frozen before inspecting validation results; tune only on training matches.
+featureKind: siglip
+reduction: umap
+umapComponents: 3
+umapNeighbors: 15
+umapMinDistance: 0.1
+clusterCount: 4
+seed: 42
+minCleanCrops: 20
+homographyStatuses: [verified]
+goalRadiusMeters: 4.0
+goalkeeperZoneMin: 0.5
+goalkeeperSideMin: 0.8
+goalkeeperMaxShare: 0.25
+# Minimum projected members or side votes before a geometric rule is applied.
+minEvidence: 3
+matchIou: 0.5
