@@ -100,6 +100,8 @@ presentation from sealed evidence without model inference. After generation,
 open `outputs/reports/index.md`, then the linked `report.md`. Tables are CSV,
 plots are SVG/PNG, and qualitative examples are a small deterministic selection.
 See [evaluation and reporting](docs/evaluation.md) for commands and metric definitions.
+[Team and role assignment](docs/teamRoles.md) derives the four athlete classes
+from generic player detections and court homographies.
 
 ## Dataset inventory
 

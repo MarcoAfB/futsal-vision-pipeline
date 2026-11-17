@@ -25,8 +25,9 @@ importing a subpackage does not eagerly load its workflows or optional backends.
 | `training` | Inspect the environment, prepare weights, select development data, audit transfer and orchestrate native training/continuation. | `trainingEnvironment`, `modelWeights`, `trainingConfig`, `trainingData`, `checkpointTransfer`, `trainingBackend`, `trainingContinuation`, `trainingRun` |
 | `tracking` | Select verified temporal ball sequences, validate model provenance and execute native tracking workers. | `trackingConfig`, `trackingData`, `trackingModels`, `trackingBackend`, `trackingWorker` |
 | `geometry` | Define the metric court, estimate gated court homographies and project image points onto the court. | `courtModel`, `homographyEstimation`, `courtProjection` |
-| `evaluation` | Validate selections and predictions, run archived checkpoints and calculate detection/native-point and homography metrics. | `evaluationData`, `evaluationBackend`, `evaluationMetrics`, `pointMetrics`, `evaluationRun`, `homographyMetrics`, `homographyRun` |
-| `reporting` | Render inventory/research reports, select examples, produce figures and coordinate research CLI processing. | `report`, `researchExamples`, `reportExamples`, `researchFigures`, `researchReport`, `researchCli`, `homographyReport`, `homographyFigures` |
+| `teams` | Crop athlete torsos, embed their appearance, cluster each match and assign team/role classes from court-side evidence. | `athleteCrops`, `appearanceFeatures`, `teamClustering`, `clusterRoles`, `sideEvidence` |
+| `evaluation` | Validate selections and predictions, run archived checkpoints and calculate detection/native-point, homography and team-assignment metrics. | `evaluationData`, `evaluationBackend`, `evaluationMetrics`, `pointMetrics`, `evaluationRun`, `homographyMetrics`, `homographyRun`, `teamFeatureRun`, `teamMetrics`, `teamRun` |
+| `reporting` | Render inventory/research reports, select examples, produce figures and coordinate research CLI processing. | `report`, `researchExamples`, `reportExamples`, `researchFigures`, `researchReport`, `researchCli`, `homographyReport`, `homographyFigures`, `teamReport` |
 
 Keep additions in the subpackage that owns their behavior. Format readers belong
 in `annotations`; dataset eligibility and export policy belong in `datasets`;
@@ -80,6 +81,10 @@ in [training](training.md) and [server training](serverTraining.md).
 `geometry` depends only on NumPy, OpenCV and configuration helpers; it reads no
 dataset or model. Homography evaluation consumes sealed court and athlete
 evaluation archives without inference. See [court homography](homography.md).
+
+`teams` holds the assignment rules; it reads no sealed archive itself. Feature
+extraction and team evaluation consume sealed player, homography and detailed
+reference evaluations. See [team and role assignment](teamRoles.md).
 
 `tests` mirrors the domain directories. Shared fixtures remain in the root
 `tests/conftest.py`; general CLI tests remain in `tests/testCli.py`. The existing
