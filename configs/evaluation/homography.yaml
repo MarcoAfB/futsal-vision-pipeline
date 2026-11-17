@@ -1,0 +1,17 @@
+schemaVersion: 1
+# Frozen before validation results were inspected (2026-11-15). Fractions refer
+# to the original image diagonal.
+pointConfidence: 0.25
+inlierThresholdDiagonal: 0.01
+maxInlierRmseDiagonal: 0.005
+minTriangleAreaSquareMeters: 1.0
+minImageHullFraction: 0.01
+courtMarginMeters: 2.0
+gridStepMeters: 0.5
+errorThresholdsMeters: [0.5, 1.0, 2.0]
+transferTolerancesDiagonal: [0.005, 0.01, 0.02]
+falseValidP90Meters: 1.0
+athleteConfidence: 0.25
+athleteMatchIou: 0.5
+iouSampleStepPixels: 8
+diagnosticConfidences: [0.1, 0.25, 0.5]
