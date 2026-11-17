@@ -392,6 +392,12 @@ def renderReport(evaluationDir, outputDir=None):
         from futsal.reporting.homographyReport import renderHomographyReport
 
         return renderHomographyReport(source, outputDir)
+    if state.get("kind") == "teamEvaluation":
+        from futsal.reporting.teamReport import renderTeamReport
+
+        return renderTeamReport(source, outputDir)
+    if state.get("kind") == "teamFeatures":
+        raise ValueError("Team features have no report of their own; evaluate them with evaluateTeams.")
     if state.get("kind") == "configurationComparison":
         from futsal.reporting.comparisonReport import renderComparisonReport
 

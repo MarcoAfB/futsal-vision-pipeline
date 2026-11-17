@@ -25,6 +25,19 @@ def addResearchCommands(commands):
     homography.add_argument("--courtLength", type=float, help="Court length in metres for every match.")
     homography.add_argument("--courtWidth", type=float, help="Court width in metres for every match.")
 
+    teamFeatures = commands.add_parser("extractTeamFeatures",
+                                       help="Embed torso crops of sealed generic player validation detections.")
+    for name in ("playerEvaluationDir", "mediaStoreDir", "outputDir"):
+        teamFeatures.add_argument(f"--{name}", type=Path, required=True)
+    teamFeatures.add_argument("--config", type=Path, default=Path("configs/evaluation/teamFeatures.yaml"))
+    teamFeatures.add_argument("--device", default="cpu")
+
+    teams = commands.add_parser("evaluateTeams",
+                                help="Assign and score team/role classes from sealed features and homographies.")
+    for name in ("featuresDir", "homographyEvaluationDir", "referenceEvaluationDir", "outputDir"):
+        teams.add_argument(f"--{name}", type=Path, required=True)
+    teams.add_argument("--config", type=Path, default=Path("configs/evaluation/teamAssignment.yaml"))
+
     courtComparison = commands.add_parser("compareCourtTraining", help="Compare real-only and supplemented court training.")
     for name in ("baselineEvaluationDir", "candidateEvaluationDir", "outputDir"):
         courtComparison.add_argument(f"--{name}", type=Path, required=True)
@@ -78,6 +91,24 @@ def handleResearchCommand(arguments):
                                     progress=lambda message: print(message, flush=True))
         path = renderReport(arguments.outputDir)
         print(f"Homography evaluation: {result['status']}; report: {path}")
+        return 0 if result["status"] == "completed" else 1
+    if arguments.command == "extractTeamFeatures":
+        from futsal.evaluation.teamFeatureRun import extractTeamFeatures
+
+        result = extractTeamFeatures(arguments.playerEvaluationDir, arguments.mediaStoreDir, arguments.outputDir,
+                                     arguments.config, device=arguments.device,
+                                     progress=lambda message: print(message, flush=True))
+        print(f"Team features: {result['status']}; crops: {result.get('cropCount')}; "
+              f"evaluation: {arguments.outputDir / 'evaluation.json'}")
+        return 0 if result["status"] == "completed" else 1
+    if arguments.command == "evaluateTeams":
+        from futsal.evaluation.teamRun import evaluateTeams
+
+        result = evaluateTeams(arguments.featuresDir, arguments.homographyEvaluationDir,
+                               arguments.referenceEvaluationDir, arguments.outputDir, arguments.config,
+                               progress=lambda message: print(message, flush=True))
+        path = renderReport(arguments.outputDir)
+        print(f"Team evaluation: {result['status']}; report: {path}")
         return 0 if result["status"] == "completed" else 1
     if arguments.command == "compareCourtTraining":
         from futsal.evaluation.courtComparison import compareCourtTraining
