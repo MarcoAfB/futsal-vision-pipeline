@@ -178,3 +178,20 @@ def testUnsealedOptionalHistoryCannotInfluenceAResearchReport(reportEvaluation):
         "epoch,metrics/mAP50-95(B)\n1,1.0\n2,1.0\n")
     with pytest.raises(ValueError, match="membership"):
         verifyEvaluation(reportEvaluation)
+
+
+def testCatalogueListsReportsWithoutRunIdentity(tmp_path):
+    root = tmp_path / "reports"
+    for folder in ("training/run", "teams/teamReport"):
+        (root / folder).mkdir(parents=True)
+    writeJson(root / "training" / "run" / "reportState.json",
+              {"schemaVersion": 1, "status": "completed", "runId": "trainingRun", "purpose": "runValidation",
+               "selection": "runValidation", "trainingStatus": "completed", "evaluationStatus": "completed",
+               "endedAt": "2026-11-19T10:00:00"})
+    # Team and homography reports write only their status and contract.
+    writeJson(root / "teams" / "teamReport" / "reportState.json",
+              {"schemaVersion": 1, "status": "completed", "evaluationStatus": "completed",
+               "evaluationContractId": "0" * 64, "endedAt": "2026-11-19T11:00:00"})
+    researchReport.updateReportIndex(root)
+    index = (root / "index.md").read_text()
+    assert "## trainingRun" in index and "## teamReport" in index

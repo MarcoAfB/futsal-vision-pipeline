@@ -363,14 +363,17 @@ def updateReportIndex(root):
         report = readJson(path)
         target = path.parent / "report.md" if (path.parent / "report.md").is_file() else path
         link = target.relative_to(root).as_posix()
-        groups[report["runId"]].append((report, path.parent.name, link))
+        # Team and homography reports record no run identity; they are listed under their folder name.
+        groups[report.get("runId") or path.parent.name].append((report, path.parent.name, link))
     lines = ["# Research report catalogue", "",
              "Reports are grouped by training run, newest presentation first, without quality rankings. "
              "Different validation selections and regenerated presentations remain explicit.", ""]
     for runId in sorted(groups):
         items = sorted(groups[runId], key=lambda item: item[0].get("endedAt", item[0].get("startedAt", "")), reverse=True)
-        rows = [[report["purpose"], report["selection"], name, report["trainingStatus"], report["evaluationStatus"],
-                 report["status"], report.get("endedAt", report.get("startedAt", "unavailable"))[:19], f"[Open]({link})"]
+        rows = [[*(report.get(key, "unavailable") for key in
+                   ("purpose", "selection")), name, *(report.get(key, "unavailable") for key in
+                                                       ("trainingStatus", "evaluationStatus", "status")),
+                 report.get("endedAt", report.get("startedAt", "unavailable"))[:19], f"[Open]({link})"]
                 for report, name, link in items]
         lines += [f"## {runId}", "", *markdownTable(
             ["Purpose", "Selection", "Presentation", "Training", "Evaluation", "Report", "Generated UTC", "Link"], rows)]
