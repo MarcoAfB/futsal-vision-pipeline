@@ -83,6 +83,9 @@ def assignMatch(features, clean, positions, sideVotes, recordIds, court, config)
     evidence = clusterEvidence(labels, positions, sideVotes, court, config)
     roles, teams = clusterRoles(centers, evidence, config)
     assigned = detectionRoles(labels, points, centers, recordIds, roles, teams)
+    for item, point in zip(assigned, points, strict=True):
+        # The outfield team a detection would join; a track-level vote reads it for goalkeepers too.
+        item["teamVote"] = item["team"] if item["role"] == "outfield" else nearestTeam(point, centers, teams)
     teamOf = np.array([item.get("team", -1) for item in assigned])
     names, namingSource, meanX = outfieldNames(teams, teamOf, positions, config["minEvidence"])
     classNames = [f"outfieldPlayerTeam{names[item['team']]}" if item["role"] == "outfield"
@@ -92,4 +95,4 @@ def assignMatch(features, clean, positions, sideVotes, recordIds, court, config)
                 "outfieldNaming": {"source": namingSource, "meanX": {str(team): value for team, value in meanX.items()}},
                 "goalkeeperSides": sorted(role["side"] for role in roles.values() if role["role"] == "goalkeeper"),
                 "reassignedGoalkeepers": sum(item["source"] == "frameGoalkeeperLimit" for item in assigned)}
-    return labels, assigned, classNames, decision
+    return labels, assigned, classNames, decision, teams

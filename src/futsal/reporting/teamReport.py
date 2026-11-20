@@ -17,8 +17,8 @@ def number(value, digits=2):
 
 
 def variants(summary):
-    return [(source, variant, summary[source][variant]) for source in ("pipeline", "baseline")
-            for variant in ("named", "bestSwap")]
+    return [(source, variant, summary[source][variant]) for source in ("pipeline", "track", "baseline")
+            if source in summary for variant in ("named", "bestSwap")]
 
 
 def overallTable(summary):
@@ -67,11 +67,29 @@ def decisionTables(decisions):
                                       "Projected", "Goal-zone %", "Side consistency %"], clusters)]
 
 
-def confusionTable(summary):
-    item = summary["pipeline"]["named"]
+def confusionTable(summary, source="pipeline"):
+    item = summary[source]["named"]
     labels = item["confusionLabels"]
-    return renderTable("Pipeline confusion (reference rows, prediction columns, as named)", ["Reference", *labels],
+    title = "Pipeline" if source == "pipeline" else "Track aggregation"
+    return renderTable(f"{title} confusion (reference rows, prediction columns, as named)", ["Reference", *labels],
                        [[label, *row] for label, row in zip(labels, item["confusionMatrix"], strict=True)])
+
+
+def trackTables(decisions):
+    rows, keepers = [], []
+    for matchId, decision in decisions.items():
+        meanX = ", ".join(f"cluster {team}: {number(value)}" for team, value in decision["outfieldNaming"]["meanX"].items())
+        rows.append([matchId, decision["tracks"], decision["outfieldNaming"]["source"], meanX,
+                     ", ".join(f"cluster {team} = {name}" for team, name in decision["teams"].items()),
+                     len(decision["goalkeeperTracks"]), decision["demotedGoalkeeperTracks"],
+                     decision["inheritedDetections"]])
+        keepers += [[matchId, item["segmentId"], item["trackId"], item["members"], item["side"], item["source"],
+                     item["strength"][1]] for item in decision["goalkeeperTracks"]]
+    return [*renderTable("Track aggregation decisions", ["Match", "Tracks", "Outfield naming", "Mean court x (m)",
+                                                         "Team names", "Goalkeeper tracks", "Demoted goalkeeper tracks",
+                                                         "Inherited detections"], rows),
+            *renderTable("Goalkeeper tracks", ["Match", "Segment", "Track", "Detections", "Side", "Source",
+                                               "Evidence count"], keepers)]
 
 
 def inputLines(state, summary):
@@ -84,6 +102,8 @@ def inputLines(state, summary):
             f"detailed references ({cohort['referenceFrames']}); {cohort['framesWithHomographyRow']} have a "
             f"homography row; {cohort['athleteReferences']} annotated athletes; {cohort['unassignedDetections']} "
             "detections had no usable crop and are not predictions.", "",
+            *([f"Track aggregation: {cohort['tracks']} tracks; {cohort['inheritedDetections']} detections "
+               "without a usable crop inherit the label of their track.", ""] if "tracks" in cohort else []),
             "Feature configuration: " + ", ".join(f"{key}={value}" for key, value in sorted(features.items())), "",
             "Assignment configuration: " + ", ".join(f"{key}={value}" for key, value in
                                                    sorted(state["configuration"].items())), ""]
@@ -91,8 +111,8 @@ def inputLines(state, summary):
 
 def methodLines():
     return ["## Method", "",
-            "Generic player detections are cropped to the torso and embedded. Each match is clustered once; no "
-            "tracking is used. The two largest clusters are the outfield teams. A smaller cluster becomes a "
+            "Generic player detections are cropped to the torso and embedded. Each match is clustered once; the "
+            "per-detection pipeline uses no tracking. The two largest clusters are the outfield teams. A smaller cluster becomes a "
             "goalkeeper when its projected members lie mostly near one goal, or, without enough projections, when "
             "the side-specific landmarks of its frames agree on one side. Other clusters join the nearest team. "
             "At most one goalkeeper per side is kept in a frame.", "",
@@ -103,6 +123,17 @@ def methodLines():
             "`bestSwap` exchanges A and B jointly for outfield players and goalkeepers when that increases correct "
             "classes in a match. bestSwap reads the labels and is a diagnostic, not a deployable result. The "
             "baseline is the four-class detector of the reference evaluation, scored the same way.", ""]
+
+
+def trackMethodLines():
+    return ["Track aggregation (features from a tracker condition): the same clusters are read per track, keyed "
+            "by segment and track ID. A track with enough projected detections is a goalkeeper when the configured "
+            "share of them lies within the goal radius; its side is the majority goal side. Without enough "
+            "projections a track is a goalkeeper when most of its embedded detections were. Goalkeeper tracks are "
+            "accepted strongest first and a track that would put a second goalkeeper on one side in a frame becomes "
+            "outfield. Outfield tracks take the majority team vote of their detections. Detections without a "
+            "usable crop inherit their track's label. No threshold is added; the assignment configuration is "
+            "reused. Track IDs are tracker output, not verified identities.", ""]
 
 
 def limitationLines():
@@ -116,11 +147,14 @@ def limitationLines():
 def teamMarkdown(root, state):
     summary = readJson(root / "evidence" / "summary.json")
     decisions = readJson(root / "evidence" / "matches.json")
+    tracked = "track" in summary
     lines = ["# Team and role assignment report", "",
              f"Status: **{state['status']}**. Purpose: **{state['purpose']}**. Test evaluated: "
              f"**{state['testEvaluated']}**.", "", *inputLines(state, summary), *methodLines(),
+             *(trackMethodLines() if tracked else []),
              *overallTable(summary), *matchTable(summary), *perClassTable(summary), *confusionTable(summary),
-             *decisionTables(decisions), *limitationLines()]
+             *(confusionTable(summary, "track") if tracked else []), *decisionTables(decisions),
+             *(trackTables(readJson(root / "evidence" / "trackMatches.json")) if tracked else []), *limitationLines()]
     return "\n".join(lines)
 
 

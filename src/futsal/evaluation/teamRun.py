@@ -13,6 +13,7 @@ from futsal.inventory.catalog import readYaml
 from futsal.reporting.researchReport import verifyEvaluation
 from futsal.teams.clusterRoles import assignMatch
 from futsal.teams.sideEvidence import courtPositions, frameEvidence
+from futsal.teams.trackRoles import assignTracks
 from futsal.training.trainingRun import snapshotCode, utcNow
 
 fractionFields = {"umapMinDistance", "goalkeeperZoneMin", "goalkeeperSideMin", "goalkeeperMaxShare", "matchIou"}
@@ -60,26 +61,55 @@ def matchCourt(geometry, matchId):
     return {"length": dimensions["length"], "width": dimensions["width"]}
 
 
-def assignCrops(crops, features, frames, geometry, config, progress):
-    assignments, decisions = [], {}
+def matchPositions(rows, frames):
+    return np.array([courtPositions([row["box"]], (frames.get(row["recordId"]) or {}).get("courtToImage"))[0]
+                     for row in rows]).reshape(-1, 2)
+
+
+def assignmentRow(row, cluster, role, className, position):
+    projected = bool(np.isfinite(position).all())
+    return {**{key: row[key] for key in ("recordId", "matchId", "detectionIndex", "box", "confidence", "clean")},
+            "cluster": cluster, "role": role["role"], "roleSource": role["source"], "className": className,
+            "courtPosition": position.tolist() if projected else None}
+
+
+def trackAssignmentRows(matchRows, votes, labels, assigned, classNames, positions):
+    """Track-level labels for every crop row of a match; rows of tracks without embeddings stay out."""
+    clusters = iter(labels)
+    rows = []
+    for row, vote, role, className, position in zip(matchRows, votes, assigned, classNames, positions, strict=True):
+        cluster = int(next(clusters)) if vote else None
+        if role is not None:
+            rows.append({**assignmentRow(row, cluster, role, className, position), "segmentId": row["segmentId"],
+                         "trackId": row["trackId"], "inherited": not vote})
+    return rows
+
+
+def assignCrops(crops, features, frames, geometry, config, progress, *, tracked=False):
+    assignments, trackAssignments, decisions, trackDecisions = [], [], {}, {}
     for matchId in sorted({row["matchId"] for row in crops}):
-        rows = [row for row in crops if row["matchId"] == matchId and row["featureIndex"] is not None]
+        matchRows = [row for row in crops if row["matchId"] == matchId]
+        embedded = [index for index, row in enumerate(matchRows) if row["featureIndex"] is not None]
+        rows = [matchRows[index] for index in embedded]
         court = matchCourt(geometry, matchId)
-        positions = np.array([courtPositions([row["box"]], (frames.get(row["recordId"]) or {}).get("courtToImage"))[0]
-                              for row in rows]).reshape(-1, 2)
+        allPositions = matchPositions(matchRows, frames)
+        positions = allPositions[embedded]
         sideVotes = [(frames.get(row["recordId"]) or {}).get("sideVote") for row in rows]
-        labels, roles, classNames, decisions[matchId] = assignMatch(
+        labels, roles, classNames, decisions[matchId], teams = assignMatch(
             features[[row["featureIndex"] for row in rows]], np.array([row["clean"] for row in rows]), positions,
             sideVotes, [row["recordId"] for row in rows], court, config)
-        for row, label, role, className, position in zip(rows, labels, roles, classNames, positions, strict=True):
-            projected = bool(np.isfinite(position).all())
-            assignments.append({**{key: row[key] for key in ("recordId", "matchId", "detectionIndex", "box",
-                                                               "confidence", "clean")},
-                                "cluster": int(label), "role": role["role"], "roleSource": role["source"],
-                                "className": className, "courtPosition": position.tolist() if projected else None})
+        assignments += [assignmentRow(row, int(label), role, className, position) for row, label, role, className,
+                        position in zip(rows, labels, roles, classNames, positions, strict=True)]
+        if tracked:
+            votes = [None] * len(matchRows)
+            for index, role in zip(embedded, roles, strict=True):
+                votes[index] = role
+            trackRoles, trackClasses, trackDecisions[matchId] = assignTracks(
+                matchRows, votes, allPositions, court, teams, config)
+            trackAssignments += trackAssignmentRows(matchRows, votes, labels, trackRoles, trackClasses, allPositions)
         progress(f"Team assignment: {matchId} with {len(rows)} crops")
     unassigned = [row for row in crops if row["featureIndex"] is None]
-    return assignments, decisions, unassigned
+    return assignments, decisions, unassigned, trackAssignments, trackDecisions
 
 
 def assignedPredictions(references, assignments):
@@ -100,6 +130,8 @@ def evaluateTeams(featuresDir, homographyEvaluationDir, referenceEvaluationDir, 
     featureRoot, featureState, featureIdentity = sealedKind(featuresDir, "teamFeatures", "Team features")
     homographyRoot, homographyState, homographyIdentity = sealedKind(
         homographyEvaluationDir, "homographyEvaluation", "Homography evaluation")
+    # Track-level aggregation applies only when the features come from a tracker condition.
+    tracked = featureState["inputs"].get("tracking", {}).get("tracked", False)
     if config["featureKind"] not in featureState["configuration"]["featureKinds"]:
         raise ValueError(f"The team features do not contain {config['featureKind']} embeddings.")
     referenceIdentity, references, baseline = sealedStage(
@@ -124,12 +156,13 @@ def evaluateTeams(featuresDir, homographyEvaluationDir, referenceEvaluationDir, 
              "purpose": "teamRoleValidation", "selection": "sealedValidation", "testEvaluated": False,
              "inputs": {"features": featureIdentity, "homography": homographyIdentity, "references": referenceIdentity},
              "configuration": config, "configurationEvidence": configEvidence,
-             "featureConfiguration": featureState["configuration"]}
+             "featureConfiguration": featureState["configuration"],
+             "aggregations": ["detection", "track"] if tracked else ["detection"]}
     saveEvaluation(outputDir, state)
     try:
         state["code"] = snapshotCode(evidenceDir)
-        assignments, decisions, unassigned = assignCrops(crops, features, frames,
-                                                         homographyState["courtGeometry"], config, progress)
+        assignments, decisions, unassigned, trackAssignments, trackDecisions = assignCrops(
+            crops, features, frames, homographyState["courtGeometry"], config, progress, tracked=tracked)
         cohortReferences = [athleteRecord(reference, "targets") for reference, _ in pairs]
         scoring = {"operationalConfidence": featureState["configuration"]["detectionConfidence"],
                    "operationalIou": config["matchIou"]}
@@ -144,6 +177,13 @@ def evaluateTeams(featuresDir, homographyEvaluationDir, referenceEvaluationDir, 
                                                                   for _, prediction in pairs], scoring)}
         writeJsonLines(evidenceDir / "assignments.jsonl", assignments)
         writeJson(evidenceDir / "matches.json", decisions)
+        if tracked:
+            summary["track"] = scoreAssignment(cohortReferences, assignedPredictions(
+                cohortReferences, trackAssignments), scoring)
+            summary["cohort"].update(tracks=sum(item["tracks"] for item in trackDecisions.values()),
+                                     inheritedDetections=sum(row["inherited"] for row in trackAssignments))
+            writeJsonLines(evidenceDir / "trackAssignments.jsonl", trackAssignments)
+            writeJson(evidenceDir / "trackMatches.json", trackDecisions)
         writeJson(evidenceDir / "summary.json", summary)
         state.update(status="completed", frameCount=len(pairs), assignmentCount=len(assignments))
     except (Exception, KeyboardInterrupt) as error:

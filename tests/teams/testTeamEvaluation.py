@@ -44,6 +44,43 @@ def testChangedFeatureEvidenceIsRefused(scene, features, assignmentConfig):
                       assignmentConfig, progress=lambda message: None)
 
 
+
+def testTrackerConditionScoresPerDetectionAndPerTrackOnTheSameBoxes(scene, trackedFeatures, assignmentConfig):
+    featureDir, featureState = trackedFeatures("player_botsort")
+    crops = readJsonLines(featureDir / "evidence" / "crops.jsonl")
+    output = scene["root"] / "trackTeams"
+    state = evaluateTeams(featureDir, scene["homography"], scene["reference"], output, assignmentConfig,
+                          progress=lambda message: None)
+    summary = readJson(output / "evidence" / "summary.json")
+    decision = readJson(output / "evidence" / "trackMatches.json")["match01"]
+    report = renderReport(output).read_text(encoding="utf-8")
+
+    assert featureState["selection"] == "sealedTrackingCondition"
+    assert featureState["inputs"]["tracking"]["conditionId"] == "player_botsort"
+    assert {(row["segmentId"], row["trackId"]) for row in crops} == {("video01:video01Reviewed:0", track)
+                                                                    for track in range(1, 7)}
+    assert state["aggregations"] == ["detection", "track"]
+    assert summary["pipeline"]["named"]["assignment"]["classAccuracy"] == 1.0
+    assert summary["track"]["named"]["assignment"]["classAccuracy"] == 1.0
+    assert summary["cohort"]["tracks"] == 6 and summary["cohort"]["inheritedDetections"] == 0
+    assert sorted(item["side"] for item in decision["goalkeeperTracks"]) == ["A", "B"]
+    assert {item["source"] for item in decision["goalkeeperTracks"]} == {"trackGoalZone"}
+    assert len(readJsonLines(output / "evidence" / "trackAssignments.jsonl")) == 33
+    assert "Track aggregation confusion" in report and "Goalkeeper tracks" in report
+
+
+def testDetectorConditionKeepsPerDetectionAssignmentOnly(scene, trackedFeatures, assignmentConfig):
+    featureDir, _ = trackedFeatures("player_detector")
+    output = scene["root"] / "detectorTeams"
+    state = evaluateTeams(featureDir, scene["homography"], scene["reference"], output, assignmentConfig,
+                          progress=lambda message: None)
+    summary = readJson(output / "evidence" / "summary.json")
+
+    assert state["aggregations"] == ["detection"] and "track" not in summary
+    assert summary["pipeline"]["named"]["assignment"]["classAccuracy"] == 1.0
+    assert not (output / "evidence" / "trackAssignments.jsonl").exists()
+
+
 def testMissingTrackingConditionIsRefused(trackedFeatures):
     with pytest.raises(ValueError, match="player_bytetrack is not completed"):
         trackedFeatures("player_bytetrack")
