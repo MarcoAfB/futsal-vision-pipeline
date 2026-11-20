@@ -5,8 +5,10 @@ assigns each of its detections one of the four athlete classes,
 `outfieldPlayerTeamA`, `outfieldPlayerTeamB`, `goalkeeperTeamA` and
 `goalkeeperTeamB`, and scores the result against the detailed validation labels.
 It reads sealed evaluation archives only, runs no detector and never reads the
-reserved test data. It uses no tracking: every detection is classified on its own,
-from a model of its match fitted once.
+reserved test data. By default every detection is classified on its own, from a
+model of its match fitted once. When the detections come from a tracker condition
+of a sealed `trackRun` campaign, the same model is also read per track (see
+[Track aggregation](#track-aggregation)).
 
 Team A/B identifies a team within one original match only. It follows the
 initial-side convention: team A defends Side A in the clip. Court Side A/B is
@@ -16,7 +18,7 @@ detector that predicts the four classes directly has to guess.
 ## Two steps
 
 ```text
-extractTeamFeatures  sealed playerOnly evaluation + media store -> kind teamFeatures
+extractTeamFeatures  sealed playerOnly evaluation or trackRun condition + media store -> kind teamFeatures
 evaluateTeams        teamFeatures + homographyEvaluation + detailed reference -> kind teamEvaluation
 ```
 
@@ -89,6 +91,53 @@ The four-class detector of the detailed reference evaluation is scored the same
 way as a baseline. Its scores therefore separate localization and role errors
 from the arbitrary A/B convention.
 
+## Track aggregation
+
+`extractTeamFeatures --trackingDir <trackRun campaign> --condition <conditionId>`
+reads the detections of one completed condition of a verified `trackingComparison`
+archive instead of a player evaluation. The references come from the campaign's
+sealed selection; crop rows also carry `segmentId` and, for tracker conditions,
+`trackId`. The detector-only condition (`<label>_detector`) has no track IDs and
+gives the per-detection result on the same inference path as the trackers.
+
+For a tracker condition `evaluateTeams` reports three sources over the same
+references: `pipeline` (per detection, as above, on the tracker's boxes), `track`
+and `baseline`. `track` reuses the clusters and per-detection roles of `pipeline`
+and decides per track, keyed by `(segmentId, trackId)` because track IDs restart
+in every segment:
+
+1. A track with at least `minEvidence` projected detections is a goalkeeper when
+   at least `goalkeeperZoneMin` of them lie within `goalRadiusMeters` of a goal
+   centre; its side is the majority goal side of those detections
+   (`trackGoalZone`). Otherwise it is outfield, whatever its cluster said.
+2. A track with fewer projected detections is a goalkeeper when more than half of
+   its embedded detections were (`trackRoleMajority`), on their majority side.
+3. Goalkeeper tracks are accepted strongest first (geometric before majority, then
+   more near-goal detections, then longer tracks). A track that would put a second
+   goalkeeper on one side in any frame becomes outfield as a whole
+   (`trackGoalkeeperLimit`).
+4. Outfield tracks take the majority of their detections' team votes: the team of
+   an outfield detection, or the nearest team centre for a detection that was a
+   goalkeeper (`trackTeamVote`). Ties go to the higher summed confidence.
+5. Detections of a track without a usable crop inherit its label; tracks with no
+   embedded detection stay unassigned.
+6. Outfield names are recomputed with the track teams (`meanX` or `none`).
+
+No threshold is added: the step reuses `teamAssignment.yaml`. A single-detection
+track keeps its per-detection label unless it was a goalkeeper removed by rule 3.
+The difference between `track` and `pipeline` is the effect of the aggregation on
+identical boxes and clusters. Evidence adds `trackAssignments.jsonl` and
+`trackMatches.json`; the summary adds `track` and the cohort counts `tracks` and
+`inheritedDetections`.
+
+Protocol fixed before the first run (2026-11-19): BoT-SORT (`<label>_botsort`) is
+the primary condition, because it was the only tracker at least as good as
+detector-only in F1 in every validation match of the generic player campaign. The
+other trackers and the detector-only condition are a sensitivity analysis, not a
+search for the best tracker. Track IDs are tracker output, not verified
+identities; no IDF1 or HOTA is implied. Tracking covers every validation frame of
+its cohort, while scoring uses the frames shared with the detailed references.
+
 ## Commands
 
 Install `--extra trainingGpu --extra teamFeatures` on the server and
@@ -115,6 +164,15 @@ uv run python -m futsal evaluateTeams --featuresDir <teamFeatures> \
   --outputDir <new directory>
 ```
 
+For every condition of a tracking campaign (BoT-SORT first), on the server:
+
+```bash
+FUTSAL_TRACKING_EVALUATION=<trackRun campaign> FUTSAL_HOMOGRAPHY_EVALUATION=<homographyEvaluation> FUTSAL_REFERENCE_EVALUATION=<detailed runValidation> bash scripts/runTrackTeams.sh
+```
+
+`FUTSAL_TRACK_CONDITIONS="player_botsort player_detector"` narrows the run. The
+server environment needs the `teamFeatures` and `teamClustering` extras.
+
 `reportRun --evaluationDir` regenerates the Markdown report from the sealed
 evidence.
 
@@ -133,5 +191,9 @@ evidence.
 - A clip that crosses a change of ends breaks the side convention.
 - Goalkeeper groups need enough frames of that goalkeeper; a goalkeeper seen in
   very few frames is merged into a team.
+- Track aggregation inherits tracker errors: an ID switch between athletes mixes
+  their votes, and fragments of one athlete are decided separately. Without
+  accepted homographies (match 11) only the per-detection roles can mark a
+  goalkeeper track.
 - Referees are not detector targets; any detected referee is assigned to a group
   and counts as a false positive.

@@ -86,6 +86,10 @@ selected the checkpoints, trackers keep native parameters, and execution time in
 setup and is not a speed benchmark. Match11 is a deliberately difficult amateur-broadcast
 match and should be inspected separately.
 
+Team and goalkeeper assignment can read one completed condition of a campaign as its
+detections and aggregate its decisions per track; see
+[teamRoles.md](teamRoles.md#track-aggregation).
+
 ## Verification
 
 ```text
