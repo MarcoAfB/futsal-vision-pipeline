@@ -26,7 +26,8 @@ def detectionCrops(prediction, config):
         overlap = float(overlaps[position].max())
         rows.append({"detectionIndex": index, "box": item["box"], "confidence": item["confidence"],
                      "torsoBox": region, "maxOverlap": overlap,
-                     "clean": region is not None and overlap <= config["overlapIouMax"]})
+                     "clean": region is not None and overlap <= config["overlapIouMax"],
+                     **({"trackId": item["trackId"]} if "trackId" in item else {})})
     return rows
 
 

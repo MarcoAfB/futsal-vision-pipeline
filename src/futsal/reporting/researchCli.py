@@ -36,7 +36,11 @@ def addResearchCommands(commands):
 
     teamFeatures = commands.add_parser("extractTeamFeatures",
                                        help="Embed torso crops of sealed generic player validation detections.")
-    for name in ("playerEvaluationDir", "mediaStoreDir", "outputDir"):
+    detections = teamFeatures.add_mutually_exclusive_group(required=True)
+    detections.add_argument("--playerEvaluationDir", type=Path)
+    detections.add_argument("--trackingDir", type=Path, help="Sealed trackRun campaign; requires --condition.")
+    teamFeatures.add_argument("--condition", help="Tracking condition, for example player_botsort.")
+    for name in ("mediaStoreDir", "outputDir"):
         teamFeatures.add_argument(f"--{name}", type=Path, required=True)
     teamFeatures.add_argument("--config", type=Path, default=Path("configs/evaluation/teamFeatures.yaml"))
     teamFeatures.add_argument("--device", default="cpu")
@@ -114,9 +118,11 @@ def handleResearchCommand(arguments):
     if arguments.command == "extractTeamFeatures":
         from futsal.evaluation.teamFeatureRun import extractTeamFeatures
 
-        result = extractTeamFeatures(arguments.playerEvaluationDir, arguments.mediaStoreDir, arguments.outputDir,
-                                     arguments.config, device=arguments.device,
-                                     progress=lambda message: print(message, flush=True))
+        if (arguments.trackingDir is None) != (arguments.condition is None):
+            raise ValueError("--condition is required with --trackingDir and only valid with it.")
+        result = extractTeamFeatures(arguments.trackingDir or arguments.playerEvaluationDir, arguments.mediaStoreDir,
+                                     arguments.outputDir, arguments.config, condition=arguments.condition,
+                                     device=arguments.device, progress=lambda message: print(message, flush=True))
         print(f"Team features: {result['status']}; crops: {result.get('cropCount')}; "
               f"evaluation: {arguments.outputDir / 'evaluation.json'}")
         return 0 if result["status"] == "completed" else 1

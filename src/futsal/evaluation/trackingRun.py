@@ -29,6 +29,40 @@ def resumeTrackedConditions(source, identity):
     return {item["conditionId"]: item for item in state["conditions"] if item["status"] == "completed"}, contract["contractId"]
 
 
+def sealedTrackingCondition(trackingDir, conditionId):
+    """Read one completed condition of a verified campaign as aligned references and predictions.
+
+    References come from the sealed selection, so they carry matchId, imageSha256 and segmentId.
+    """
+    from futsal.evaluation.trackingMetrics import validateTrackedPredictions
+    from futsal.reporting.researchReport import verifyEvaluation
+
+    root = Path(trackingDir).resolve()
+    state, contract = verifyEvaluation(root)
+    if state.get("kind") != "trackingComparison" or state["status"] != "completed" or \
+            state.get("testEvaluated") is not False:
+        raise ValueError("Tracking campaign: a completed validation-only trackingComparison is required.")
+    conditions = {item["conditionId"]: item for item in state["conditions"]}
+    condition = conditions.get(conditionId)
+    if condition is None or condition["status"] != "completed":
+        raise ValueError(f"Tracking campaign: condition {conditionId} is not completed; "
+                         f"available: {sorted(conditions)}.")
+    selection = readJson(root / "evidence" / "selection.json")
+    if selection != state["selectionEvidence"]:
+        raise ValueError("Tracking campaign: the sealed selection differs from the campaign state.")
+    tracked = condition["tracker"] != "detector"
+    predictions = validateTrackedPredictions(
+        selection["references"], readJsonLines(root / condition["evidenceDirectory"] / "predictions.jsonl"),
+        selection["classes"], state["protocol"], tracked)
+    model = state["models"][condition["label"]]
+    identity = {"directory": str(root), "kind": "trackingComparison", "contractId": contract["contractId"],
+                "evaluationSha256": contract["evaluationSha256"], "campaignId": state["campaignId"],
+                "conditionId": conditionId, "tracker": condition["tracker"], "tracked": tracked,
+                "taskId": selection["taskId"], "classes": selection["classes"],
+                "checkpointSha256": model["checkpointSha256"], "recordCount": len(predictions)}
+    return identity, selection["references"], predictions
+
+
 def scoreCondition(state, evidence, tracker):
     selection = state["selectionEvidence"]
     return scoreTracking(selection["references"], readJsonLines(evidence / "predictions.jsonl"),

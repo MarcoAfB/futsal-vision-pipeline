@@ -73,6 +73,35 @@ def homographyArchive(root, images):
     return root
 
 
+def trackingArchive(root, players):
+    """A sealed trackRun campaign with a detector-only and a BoT-SORT condition over one segment.
+
+    Athletes keep their list position across frames, so that position is their track ID.
+    """
+    segmentId = "video01:video01Reviewed:0"
+    references = [{**reference, "taskId": "playerOnly", "segmentId": segmentId} for reference, _ in players]
+    selection = {"taskId": "playerOnly", "classes": ["player"], "references": references, "frameCount": len(players)}
+    conditions = []
+    for tracker in ("detector", "botsort"):
+        conditionId = f"player_{tracker}"
+        folder = root / "evidence" / "conditions" / conditionId
+        folder.mkdir(parents=True)
+        writeJsonLines(folder / "predictions.jsonl", [
+            {"recordId": prediction["recordId"], "frameIndex": reference["frameIndex"], "segmentId": segmentId,
+             "dimensions": prediction["dimensions"],
+             "detections": [{**item, "trackId": None if tracker == "detector" else index + 1}
+                            for index, item in enumerate(prediction["detections"])]}
+            for reference, prediction in players])
+        conditions.append({"conditionId": conditionId, "label": "player", "tracker": tracker, "status": "completed",
+                           "evidenceDirectory": f"evidence/conditions/{conditionId}", "frames": len(players)})
+    writeJson(root / "evidence" / "selection.json", selection)
+    sealEvaluation(root, {"schemaVersion": 1, "kind": "trackingComparison", "status": "completed",
+                          "testEvaluated": False, "campaignId": "c" * 64, "selectionEvidence": selection,
+                          "protocol": {"detectorConfidence": 0.1, "maxDetections": 300},
+                          "models": {"player": {"checkpointSha256": "0" * 64}}, "conditions": conditions})
+    return root
+
+
 @pytest.fixture
 def scene(tmp_path):
     media = tmp_path / "media"
@@ -108,7 +137,7 @@ def scene(tmp_path):
     homographyDir = homographyArchive(tmp_path / "homography",
                                       [(item[0]["recordId"], item[0]["imageSha256"]) for item in players])
     return {"media": media, "player": playerDir, "reference": referenceDir, "homography": homographyDir,
-            "root": tmp_path}
+            "root": tmp_path, "players": players}
 
 
 def writeConfig(path, source, **changes):
@@ -138,3 +167,24 @@ def assignmentConfig(scene):
 @pytest.fixture
 def foreignHomography(scene):
     return homographyArchive(scene["root"] / "otherHomography", [("video01:0", "f" * 64)])
+
+
+@pytest.fixture
+def tracking(scene):
+    return trackingArchive(scene["root"] / "tracking", scene["players"])
+
+
+@pytest.fixture
+def trackedFeatures(scene, tracking):
+    from futsal.evaluation.teamFeatureRun import extractTeamFeatures
+
+    config = writeConfig(scene["root"] / "teamFeatures.yaml", "configs/evaluation/teamFeatures.yaml",
+                         featureKinds=["colorHistogram"])
+
+    def extract(condition):
+        output = scene["root"] / f"features_{condition}"
+        state = extractTeamFeatures(tracking, scene["media"], output, config, condition=condition,
+                                    progress=lambda message: None)
+        return output, state
+
+    return extract

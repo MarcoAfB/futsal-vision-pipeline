@@ -9,6 +9,7 @@ from futsal.datasets.mediaStore import protectMediaOutput, readBindings
 from futsal.evaluation.evaluationData import validateResearchOutput, writeJsonLines
 from futsal.evaluation.evaluationRun import saveEvaluation, sealEvaluation
 from futsal.evaluation.homographyRun import sealedStage
+from futsal.evaluation.trackingRun import sealedTrackingCondition
 from futsal.inventory.catalog import readYaml
 from futsal.reporting.homographyFigures import loadImage
 from futsal.teams.appearanceFeatures import colorHistogram, loadSiglip, siglipEmbeddings
@@ -58,24 +59,36 @@ def collectCrops(references, predictions, mediaStoreDir, config, progress):
                 featureIndex = len(crops)
                 crops.append(cropImage(image, item["torsoBox"]).copy())
             rows.append({"recordId": reference["recordId"], "matchId": reference["matchId"],
-                         "imageSha256": reference["imageSha256"], "featureIndex": featureIndex, **item})
+                         "imageSha256": reference["imageSha256"], "featureIndex": featureIndex,
+                         **({"segmentId": prediction["segmentId"]} if "segmentId" in prediction else {}), **item})
         if index % 100 == 0 or index == len(references):
             progress(f"Athlete crops: {index}/{len(references)} frames, {len(crops)} crops")
     return rows, crops
 
 
-def extractTeamFeatures(playerEvaluationDir, mediaStoreDir, outputDir, configPath, *, device="cpu", progress=print):
-    outputDir = validateResearchOutput(outputDir, [Path(playerEvaluationDir)], [Path(configPath)])
+def playerSource(sourceDir, condition):
+    """A sealed player evaluation, or one condition of a sealed tracking campaign when condition is given."""
+    if condition is None:
+        identity, references, predictions = sealedStage(
+            sourceDir, lambda classes: "player" in classes, "Player evaluation")
+        return "sealedPlayerValidation", {"player": identity}, references, predictions
+    identity, references, predictions = sealedTrackingCondition(sourceDir, condition)
+    if "player" not in identity["classes"]:
+        raise ValueError("Tracking campaign: the tracked task has no player class.")
+    return "sealedTrackingCondition", {"tracking": identity}, references, predictions
+
+
+def extractTeamFeatures(sourceDir, mediaStoreDir, outputDir, configPath, *, condition=None, device="cpu",
+                        progress=print):
+    outputDir = validateResearchOutput(outputDir, [Path(sourceDir)], [Path(configPath)])
     protectMediaOutput(outputDir, mediaStoreDir)
     config, configEvidence = loadTeamFeatureConfig(configPath)
-    playerIdentity, references, predictions = sealedStage(
-        playerEvaluationDir, lambda classes: "player" in classes, "Player evaluation")
+    selection, inputs, references, predictions = playerSource(sourceDir, condition)
     evidenceDir = outputDir / "evidence"
     evidenceDir.mkdir(parents=True)
     state = {"schemaVersion": 1, "kind": "teamFeatures", "status": "running", "startedAt": utcNow(),
-             "purpose": "teamAppearanceFeatures", "selection": "sealedPlayerValidation", "testEvaluated": False,
-             "inputs": {"player": playerIdentity}, "configuration": config,
-             "configurationEvidence": configEvidence, "device": device}
+             "purpose": "teamAppearanceFeatures", "selection": selection, "testEvaluated": False,
+             "inputs": inputs, "configuration": config, "configurationEvidence": configEvidence, "device": device}
     saveEvaluation(outputDir, state)
     try:
         state["code"] = snapshotCode(evidenceDir)

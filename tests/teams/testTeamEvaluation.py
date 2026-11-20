@@ -44,6 +44,18 @@ def testChangedFeatureEvidenceIsRefused(scene, features, assignmentConfig):
                       assignmentConfig, progress=lambda message: None)
 
 
+def testMissingTrackingConditionIsRefused(trackedFeatures):
+    with pytest.raises(ValueError, match="player_bytetrack is not completed"):
+        trackedFeatures("player_bytetrack")
+
+
+def testChangedTrackingPredictionsAreRefused(tracking, trackedFeatures):
+    with (tracking / "evidence" / "conditions" / "player_botsort" / "predictions.jsonl").open(
+            "a", encoding="utf-8") as stream:
+        stream.write("\n")
+    with pytest.raises(ValueError, match="changed"):
+        trackedFeatures("player_botsort")
+
 @pytest.mark.teamIntegration
 def testUmapReductionKeepsSeparatedUniformGroups():
     generator = np.random.default_rng(0)
