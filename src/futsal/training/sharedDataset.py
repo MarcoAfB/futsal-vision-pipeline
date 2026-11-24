@@ -77,3 +77,25 @@ class SharedDetectionDataset(YOLODataset):
                 index = self.buffer.pop(0)
                 self.ims[index], self.im_hw0[index], self.im_hw[index] = None, None, None
         return image, (height, width), image.shape[:2]
+
+
+class SharedPoseDataset(SharedDetectionDataset):
+    """One full-frame court instance with every landmark as a keypoint; frames without landmarks are background."""
+
+    def __init__(self, rows, poseLabels, **kwargs):
+        self.poseLabels = poseLabels
+        super().__init__(rows, **kwargs)
+
+    def get_labels(self):
+        from futsal.training.courtPose import fullFrameBox
+
+        if self.poseLabels["landmarks"] != self.data["kpt_names"][0]:
+            raise ValueError("Pose labels and dataset keypoint names differ.")
+        labels = super().get_labels()
+        for label in labels:
+            keypoints = np.array(self.poseLabels["records"][label["recordId"]], dtype=np.float32)
+            visible = bool((keypoints[:, 2] > 0).any())
+            label["cls"] = np.zeros((int(visible), 1), dtype=np.float32)
+            label["bboxes"] = np.array([fullFrameBox] if visible else [], dtype=np.float32).reshape(-1, 4)
+            label["keypoints"] = keypoints[None] if visible else np.zeros((0, *keypoints.shape), dtype=np.float32)
+        return labels
