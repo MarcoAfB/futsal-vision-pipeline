@@ -33,7 +33,9 @@ synthetic court references.
 
 Each predicted landmark is the highest-confidence box centre of its class with
 confidence at least `pointConfidence` (0.25). Boxes touching the image border are
-counted because their centres can be shifted by truncation.
+counted because their centres can be shifted by truncation. Court Pose runs
+archive the same detections, with boxes centred on the keypoints
+([courtPose.md](courtPose.md)), so their evaluations are accepted unchanged.
 
 With at most twenty landmarks, every four-landmark subset is examined. Subsets
 containing three court points closer to collinear than `minTriangleAreaSquareMeters`

@@ -245,7 +245,9 @@ nonzero, and which record origins stay unaugmented. `checkpointSelection` select
 mAP50:95. Both fields are currently limited to independent courtPoints training.
 Profiles without them keep all augmentations disabled and box-AP selection.
 Details, the side-swapping horizontal flip and the YOLO26m ablation are in
-[courtAugmentation.md](courtAugmentation.md).
+[courtAugmentation.md](courtAugmentation.md). A third optional field,
+`representation: courtPose`, trains the court landmarks as twenty keypoints of one
+YOLO26 Pose instance; see [courtPose.md](courtPose.md).
 
 ## Seeds and interrupted attempts
 

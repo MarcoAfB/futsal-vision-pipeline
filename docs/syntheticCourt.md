@@ -65,7 +65,7 @@ quarantine and the real raw-source contract remain unchanged.
 
 The optional argument resolves the run policy to `realWithSyntheticCourt` and
 archives the override. The original YAML remains `realOnly`. Supplementation is
-restricted to independent scientific courtPoints training; other profiles retain
+restricted to independent scientific or pilot courtPoints training; other profiles retain
 their existing restrictions. Missing, incompatible or corrupt synthetic sources
 fail explicitly. No generation is triggered by a train command.
 

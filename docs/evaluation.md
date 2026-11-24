@@ -77,7 +77,8 @@ are zero. Class, match and point plots are separate within each task.
 
 Qualitative panels place native references and operational predictions side by
 side. Point references are crosses; predictions are box centers with displacement
-segments. Stable class colours and numeric class IDs reference the class table.
+segments. For courtPose runs those centres are the keypoints themselves
+([courtPose.md](courtPose.md)). Stable class colours and numeric class IDs reference the class table.
 An annotated ball receives a separate enlarged detail strip below the full image,
 so the crop does not hide the court. Up to three seed-42 shared cases and three
 explicitly ranked difficult cases are retained per stage. Archived source examples
