@@ -10,7 +10,7 @@ from futsal.training.augmentationPolicy import (
 )
 from futsal.training.modelWeights import validateModelSize
 
-optionalScientificFields = {"augmentation", "checkpointSelection"}
+optionalScientificFields = {"augmentation", "checkpointSelection", "representation"}
 
 
 def resolveTrainingConfig(config, *, seed=None, modelSize=None):
@@ -77,6 +77,8 @@ def loadTrainingConfig(path, recipe):
         policy = data["augmentation"]["policy"]
     if "checkpointSelection" in data:
         validateCheckpointSelection(data["checkpointSelection"], stageIds)
+    if "representation" in data:
+        validateRepresentation(data, stageIds)
     for stage in stages:
         validateParameters(stageParameters(data, stage), scientific, policy)
     validateParameters(data["parameters"], scientific, policy)
@@ -94,6 +96,17 @@ def validateCheckpointSelection(selection, stageIds):
         value = selection[key]
         if type(value) not in {int, float} or not 0 < value < 1:
             raise ValueError(f"checkpointSelection {key} must be in (0, 1).")
+
+
+def validateRepresentation(config, stageIds):
+    if config["representation"] != "courtPose":
+        raise ValueError("The only declared alternative court representation is courtPose.")
+    if stageIds != ["courtPoints"] or "checkpointSelection" not in config:
+        raise ValueError("courtPose requires independent courtPoints training with point-based checkpoint selection.")
+
+
+def courtRepresentation(config):
+    return config.get("representation", "pointBoxes")
 
 
 def checkpointSelectionCriterion(config):
