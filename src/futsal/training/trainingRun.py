@@ -18,10 +18,12 @@ from futsal.evaluation.evaluationData import buildReferences
 from futsal.inventory.catalog import hashFile
 from futsal.inventory.yoloInventory import scanFiles
 from futsal.reporting.report import atomicWrite
+from futsal.training.courtPose import courtPoseLabels
 from futsal.training.memoryRecovery import errorCauses, isMemoryFailure
 from futsal.training.modelWeights import verifyWeights
 from futsal.training.trainingBackend import initializeBackend, trainStage
 from futsal.training.trainingConfig import (
+    courtRepresentation,
     loadTrainingConfig,
     resolveTrainingConfig,
     stageParameters,
@@ -102,6 +104,8 @@ def executeStages(config, selection, initialWeights, runDir, run, evidence, prog
         if "checkpointSelection" in config:
             options["pointReferences"] = buildReferences(plan, {"rows": task["validation"],
                                                                 "classes": task["classes"]})
+        if courtRepresentation(config) == "courtPose":
+            options["pointBoxes"] = plan["recipe"]["pointBoxes"]
         result = trainStage(config, task, stage, inputWeights,
                             stageDir, runDir, evidence, **options)
         if hashFile(inputWeights) != state["inputWeights"]["sha256"]:
@@ -145,6 +149,8 @@ def runTraining(datasetDir, configPath, weightsPath, outputDir, progress=print, 
         validateNewOutput(runDir, memoryRetryFrom, [memoryRetryFrom])
     sourceConfig = loadTrainingConfig(configPath, readJson(datasetDir / "plan.json")["recipe"])
     config = resolveTrainingConfig(sourceConfig, seed=seed, modelSize=modelSize)
+    if courtRepresentation(config) == "courtPose" and not shared:
+        raise ValueError("courtPose training requires a shared task view.")
     if syntheticDir is not None:
         from futsal.training.syntheticTraining import requireCourtTraining
 
@@ -214,7 +220,8 @@ def runTraining(datasetDir, configPath, weightsPath, outputDir, progress=print, 
         if shared:
             from futsal.training.sharedRuntime import prepareSharedRuntime
 
-            evidence = prepareSharedRuntime(mediaStoreDir, runDir, selection)
+            evidence = prepareSharedRuntime(mediaStoreDir, runDir, selection,
+                                            courtPoseLabels(config, selection, readJson(datasetDir / "plan.json")))
         else:
             evidence = copyRuntimeData(datasetDir, runDir, selection, syntheticDir=syntheticDir)
         run["selectionSha256"] = hashFile(runDir / "selection.json")

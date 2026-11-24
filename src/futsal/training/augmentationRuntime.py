@@ -45,6 +45,12 @@ def replaceHorizontalFlip(transforms, flip):
     transforms.transforms[positions[0]] = flip
 
 
+def requireNativeKeypointFlip(transforms, classMap):
+    flips = [item for item in transforms.transforms if isinstance(item, RandomFlip) and item.direction == "horizontal"]
+    if len(flips) != 1 or list(flips[0].flip_idx or []) != list(classMap):
+        raise ValueError("The native horizontal flip must swap mirrored court keypoints.")
+
+
 def installTrainingTransforms(dataset, args, config, task, recordOf):
     requireInactiveAlbumentations(dataset.transforms)
     block = config.get("augmentation")
@@ -56,11 +62,14 @@ def installTrainingTransforms(dataset, args, config, task, recordOf):
     plainArgs = SimpleNamespace(**{**vars(args), **dict.fromkeys(augmentationKeys, 0.0)})
     plain = dataset.build_transforms(hyp=plainArgs)
     classMap = mirroredClassIndices(task["classes"])
-    replaceHorizontalFlip(dataset.transforms, SideSwapFlip(args.fliplr, classMap))
+    if hasattr(dataset, "poseLabels"):
+        requireNativeKeypointFlip(dataset.transforms, classMap)
+    else:
+        replaceHorizontalFlip(dataset.transforms, SideSwapFlip(args.fliplr, classMap))
     dataset.transforms = OriginGatedTransforms(dataset.transforms, plain, exempt)
     names = task["classes"]
+    mapKey = "horizontalFlipKeypointMap" if hasattr(dataset, "poseLabels") else "horizontalFlipClassMap"
     return {"policy": block["policy"], "exemptOrigins": block["exemptOrigins"],
             "values": {key: getattr(args, key) for key in augmentationPolicies[block["policy"]]},
-            "horizontalFlipClassMap": {names[index]: names[target] for index, target in enumerate(classMap)
-                                       if index != target},
+            mapKey: {names[index]: names[target] for index, target in enumerate(classMap) if index != target},
             "trainingRecords": len(dataset.labels), "exemptRecords": len(exempt)}

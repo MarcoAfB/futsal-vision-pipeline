@@ -12,11 +12,11 @@ from futsal.datasets.syntheticCourt import (
 def requireCourtTraining(config):
     if (
         config.get("schemaVersion") != 2
-        or config.get("purpose") != "scientificTraining"
+        or config.get("purpose") not in {"scientificTraining", "scientificPilot"}
         or [stage["taskId"] for stage in config["stages"]] != ["courtPoints"]
     ):
         raise ValueError(
-            "Synthetic data are supported only for independent scientific courtPoints training."
+            "Synthetic data are supported only for independent scientific or pilot courtPoints training."
         )
 
 

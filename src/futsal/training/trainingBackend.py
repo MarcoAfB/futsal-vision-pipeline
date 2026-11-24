@@ -9,7 +9,11 @@ from futsal.datasets.datasetFiles import verifyEvidence, writeJson
 from futsal.inventory.catalog import hashFile, readYaml
 from futsal.training.checkpointTransfer import classificationKeys, loadAudited
 from futsal.training.memoryRecovery import requireFixedBatch
-from futsal.training.trainingConfig import checkpointSelectionCriterion, stageParameters
+from futsal.training.trainingConfig import (
+    checkpointSelectionCriterion,
+    courtRepresentation,
+    stageParameters,
+)
 from futsal.training.trainingExposure import EpochExposure, verifyNaturalSampling
 
 
@@ -53,6 +57,9 @@ def verifyLoader(dataset, task, split, runDir):
         raise ValueError(f"Native loader changed {split} image membership.")
     for path, label in actual.items():
         row = expected[path]
+        if hasattr(dataset, "poseLabels"):
+            verifyPoseLabel(label, row, dataset.poseLabels)
+            continue
         content = (renderYoloLabels(row["targets"]).splitlines() if hasattr(dataset, "sharedRows") else
                    (Path(runDir) / "runtimeData" / row["labelPath"]).read_text().splitlines())
         wanted = np.array(sorted(tuple(map(float, line.split())) for line in content)).reshape(-1, 5)
@@ -63,14 +70,31 @@ def verifyLoader(dataset, task, split, runDir):
     return {"imageCount": len(actual), "annotationsVerified": True}
 
 
+def verifyPoseLabel(label, row, poseLabels):
+    import numpy as np
+
+    from futsal.training.courtPose import fullFrameBox
+
+    expected = np.array(poseLabels["records"][row["recordId"]], dtype=np.float32)
+    visible = [int(index) for index in np.flatnonzero(expected[:, 2] > 0)]
+    count = int(bool(visible))
+    if (visible != sorted(target["classId"] for target in row["targets"])
+            or label["cls"].tolist() != [[0.0]] * count or label["bboxes"].tolist() != [fullFrameBox] * count
+            or not np.array_equal(label["keypoints"], expected[None][:count])):
+        raise ValueError(f"Native Pose loader discarded or changed landmarks: {row['recordId']}.")
+
+
 def validationMetrics(metrics, names, support, purpose="technicalSmoke"):
     indices = {int(classId): index for index, classId in enumerate(metrics.ap_class_index)}
+    keys = ("precision", "recall", "ap50", "ap50To95")
+    if hasattr(metrics, "pose"):
+        keys += ("posePrecision", "poseRecall", "poseAp50", "poseAp50To95")
     perClass = {}
     for classId, name in enumerate(names):
-        values = metrics.class_result(indices[classId]) if classId in indices else (0, 0, 0, 0)
+        values = metrics.class_result(indices[classId]) if classId in indices else (0,) * len(keys)
         perClass[name] = {"support": support[name], "supported": support[name] > 0,
                           **{key: float(value) if support[name] else None for key, value in
-                             zip(("precision", "recall", "ap50", "ap50To95"), values, strict=True)}}
+                             zip(keys, values, strict=True)}}
     aggregate = {key: float(value) for key, value in metrics.results_dict.items()}
     if any(not math.isfinite(value) for value in aggregate.values()) or any(
         value is not None and not math.isfinite(value) for item in perClass.values()
@@ -82,7 +106,7 @@ def validationMetrics(metrics, names, support, purpose="technicalSmoke"):
 
 
 def trainStage(config, task, stage, inputWeights, stageDir, runDir, runtimeEvidence, *, batchRecovery="native",
-               pointReferences=None):
+               pointReferences=None, pointBoxes=None):
     from ultralytics.utils import LOGGER
 
     logDir = Path(runDir) / "logs"
@@ -91,19 +115,26 @@ def trainStage(config, task, stage, inputWeights, stageDir, runDir, runtimeEvide
     LOGGER.addHandler(handler)
     try:
         return trainNativeStage(config, task, stage, inputWeights, stageDir, runDir, runtimeEvidence,
-                                batchRecovery=batchRecovery, pointReferences=pointReferences)
+                                batchRecovery=batchRecovery, pointReferences=pointReferences, pointBoxes=pointBoxes)
     finally:
         LOGGER.removeHandler(handler)
         handler.close()
 
 
 def trainNativeStage(config, task, stage, inputWeights, stageDir, runDir, runtimeEvidence, *, batchRecovery="native",
-                     pointReferences=None):
+                     pointReferences=None, pointBoxes=None):
     import torch
     from ultralytics.models.yolo.detect import DetectionTrainer
+    from ultralytics.models.yolo.pose import PoseTrainer
     from ultralytics.nn.tasks import load_checkpoint
     from ultralytics.utils.torch_utils import strip_optimizer
 
+    from futsal.training.courtPose import poseClass, poseDatasetEntries
+
+    pose = courtRepresentation(config) == "courtPose"
+    if pose and (pointReferences is None or pointBoxes is None):
+        raise ValueError("courtPose training requires native point references and point box fractions.")
+    names = [poseClass] if pose else task["classes"]
     stageDir, runDir = Path(stageDir), Path(runDir)
     mixed = {row["origin"] for row in task["training"]} == {"own", "public"}
     exposure = EpochExposure(task["training"]) if mixed else None
@@ -115,7 +146,7 @@ def trainNativeStage(config, task, stage, inputWeights, stageDir, runDir, runtim
     def recordOf(label):
         return label.get("recordId") or copiedRecords[Path(label["im_file"]).resolve()]
 
-    class AuditedDetectionTrainer(DetectionTrainer):
+    class AuditedDetectionTrainer(PoseTrainer if pose else DetectionTrainer):
         def preprocess_batch(self, batch):
             if exposure is not None:
                 records = batch.get("recordId")
@@ -156,7 +187,7 @@ def trainNativeStage(config, task, stage, inputWeights, stageDir, runDir, runtim
                 raise ValueError("Point selection requires one validation record per image file.")
             return pointSelectionValidator(self.test_loader, self.save_dir, copy(self.args), self.callbacks,
                                            pointReferences, task["classes"], config["checkpointSelection"],
-                                           files.__getitem__)
+                                           files.__getitem__, pointBoxes if pose else None)
 
         def validate(self):
             if pointReferences is None:
@@ -182,12 +213,16 @@ def trainNativeStage(config, task, stage, inputWeights, stageDir, runDir, runtim
             root = runDir / "runtimeData" / stage["taskId"]
             expected = {"path": str(root), "train": "images/train", "val": "images/val",
                         "names": dict(enumerate(task["classes"]))}
+            if pose:
+                expected.update(poseDatasetEntries(task["classes"]))
             if data != expected:
                 raise ValueError("Runtime dataset configuration differs from the selected task.")
             return {**data, "train": str(root / data["train"]), "val": str(root / data["val"]),
-                    "nc": len(task["classes"]), "channels": 3, "yaml_file": self.args.data}
+                    "nc": len(names), "channels": 3, "yaml_file": self.args.data}
 
         def get_model(self, cfg=None, weights=None, verbose=True):
+            if pose:
+                cfg = f"yolo26{config['modelSize']}-pose.yaml"
             model = super().get_model(cfg=cfg, weights=None, verbose=verbose)
             if weights is None or weights.yaml.get("scale") != config["modelSize"]:
                 raise ValueError("Training requires the selected YOLO26 pretrained model scale.")
@@ -217,7 +252,7 @@ def trainNativeStage(config, task, stage, inputWeights, stageDir, runDir, runtim
                  "data": str(runDir / "runtimeData" / stage["taskId"] / "dataset.yaml"),
                  "project": str(stageDir.parent), "name": stageDir.name, "exist_ok": False,
                  "epochs": stage["epochs"], "device": config["device"], "seed": config["seed"],
-                 "task": "detect", "mode": "train", "resume": False, "pretrained": True,
+                 "task": "pose" if pose else "detect", "mode": "train", "resume": False, "pretrained": True,
                  "cls_remap": True, "split": "val", "val": True, "fraction": 1.0,
                  "single_cls": False, "classes": None, "compile": False,
                  "nbs": parameters.get("nbs", 2), "nms": False}
@@ -293,14 +328,14 @@ def trainNativeStage(config, task, stage, inputWeights, stageDir, runDir, runtim
     writeJson(stageDir / "effectiveArguments.json", {**vars(trainer.args), "batch": trainer.batch_size})
     elapsed = time.perf_counter() - started
     verifyEvidence(runDir, runtimeEvidence)
-    names = task["classes"]
     metrics = trainer.validator.metrics
+    support = ({names[0]: sum(bool(row["targets"]) for row in task["validation"])} if pose
+               else task["validationSupport"])
     if trainer.validator.seen != len(task["validation"]) or any(
-        int(metrics.nt_per_class[index]) != task["validationSupport"][name]
-        for index, name in enumerate(names)
+        int(metrics.nt_per_class[index]) != support[name] for index, name in enumerate(names)
     ):
         raise ValueError("Validation did not process the exact selected annotations.")
-    result = validationMetrics(metrics, names, task["validationSupport"], config["purpose"])
+    result = validationMetrics(metrics, names, support, config["purpose"])
     result["training"] = {"requestedEpochs": stage["epochs"], "completedEpochs": len(history),
                           "requestedBatch": parameters["batch"], "effectiveBatch": trainer.batch_size,
                           "batchRecovery": batchRecovery,
@@ -324,12 +359,15 @@ def trainNativeStage(config, task, stage, inputWeights, stageDir, runDir, runtim
             raise ValueError(f"{kind} checkpoint ontology differs from the stage classes.")
         if not model.end2end or model.model[-1].nc != len(names):
             raise ValueError(f"{kind} checkpoint lost the YOLO26 end-to-end detection contract.")
+        if pose and list(model.kpt_shape) != [len(task["classes"]), 3]:
+            raise ValueError(f"{kind} checkpoint lost the court landmark keypoint shape.")
         classificationKeys(model)
         if not all(bool(torch.isfinite(value).all()) for value in model.state_dict().values()):
             raise ValueError(f"{kind} checkpoint contains nonfinite tensors.")
         checkpoints[kind] = {"path": path.relative_to(runDir).as_posix(),
                              "sha256": hashFile(path), "byteSize": path.stat().st_size,
-                             "classCount": len(names), "names": names, "end2end": model.end2end}
+                             "classCount": len(names), "names": names, "end2end": model.end2end,
+                             **({"keypointNames": task["classes"]} if pose else {})}
     result["checkpoints"] = checkpoints
     result["losses"] = {key: float(value.detach().cpu()) for key, value in trainer.tloss.items()}
     writeJson(stageDir / "metrics.json", result)

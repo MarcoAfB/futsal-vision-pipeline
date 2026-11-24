@@ -34,3 +34,23 @@ def testNativeTransferUsesNamesAcrossBothBranches(tmp_path, monkeypatch, modelSi
     finalAudit = loadAudited(final, target)
     assert {row["targetIndex"] for row in finalAudit["verifiedRows"]} == {4}
     assert finalAudit["verifiedCompatibleTensorCount"] > 400
+
+
+@pytest.mark.trainingIntegration
+def testCourtPoseModelKeepsDetectionBackboneAndStartsNewKeypointHeads(tmp_path, monkeypatch):
+    monkeypatch.setenv("YOLO_CONFIG_DIR", str(tmp_path / "settings"))
+    monkeypatch.setenv("YOLO_OFFLINE", "true")
+    monkeypatch.setenv("MPLCONFIGDIR", str(tmp_path / "matplotlib"))
+    torch = pytest.importorskip("torch")
+    from ultralytics.nn.tasks import DetectionModel, PoseModel
+
+    torch.set_num_threads(2)
+    source = DetectionModel("yolo26n.yaml", nc=2, verbose=False)
+    source.names = {0: "person", 1: "ball"}
+    target = PoseModel("yolo26n-pose.yaml", nc=1, data_kpt_shape=(20, 3), verbose=False)
+    target.names = {0: "court"}
+    audit = loadAudited(target, source)
+    assert audit["matchedClasses"] == [] and audit["newClasses"] == ["court"]
+    assert not any("cv4" in key for key in audit["compatibleTensorKeys"])
+    assert any(key.startswith("model.0.") for key in audit["compatibleTensorKeys"])
+    assert list(target.model[-1].kpt_shape) == [20, 3]
