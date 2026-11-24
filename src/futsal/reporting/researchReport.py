@@ -15,6 +15,7 @@ from futsal.inventory.catalog import hashFile, resolveSourcePath
 from futsal.reporting.report import atomicWrite, markdownCell
 from futsal.reporting.reportExamples import renderExamples
 from futsal.reporting.researchFigures import stageFigures
+from futsal.training.trainingConfig import courtRepresentation
 from futsal.training.trainingExposure import sourceComposition
 from futsal.training.trainingRun import fileEvidence, utcNow
 
@@ -142,6 +143,16 @@ def stageTables(detection, points, directory):
                  for tolerance, rate in row["successRates"].items()])
 
 
+selectionCriteria = {"nativeValidationMap50To95": "training validation mAP50-95",
+                     "nativeValidationPointSuccessMacro": "training validation macro native point success"}
+pointRepresentations = {
+    "pointBoxes": "A predicted location is its detection-box center.",
+    "courtPose": "A predicted location is a keypoint of the most confident court Pose instance; its confidence is "
+                 "the instance confidence times the keypoint visibility, and its box is a reference-sized box "
+                 "centred on the keypoint.",
+}
+
+
 def stageMarkdown(root, state, stage):
     taskId = stage["taskId"]
     lines = [f"## {taskId}", "", f"Evaluation status: **{stage['status']}**.", ""]
@@ -165,7 +176,8 @@ def stageMarkdown(root, state, stage):
         [[trainCount, available["training"]["imageCount"], stage["imageCount"],
           available["validation"]["imageCount"], len(stage["classes"])]]),
         f"Best checkpoint SHA-256: `{stage['checkpoint']['sha256']}`. Size: "
-        f"{stage['checkpoint']['byteSize'] / 1024 ** 2:.2f} MiB. Selection criterion: training validation mAP50-95.", "",
+        f"{stage['checkpoint']['byteSize'] / 1024 ** 2:.2f} MiB. Selection criterion: "
+        f"{selectionCriteria[training.get('results', {}).get('training', {}).get('selectionCriterion', 'nativeValidationMap50To95')]}.", "",
         *markdownTable(["Original match", "Evaluated images"], sorted(detection["matchCounts"].items()))]
     selectionPath = root / "evidence" / "trainingSelection.json"
     if selectionPath.is_file():
@@ -243,7 +255,8 @@ def stageMarkdown(root, state, stage):
     if points["perClass"]:
         key = str(state["protocol"]["primaryPointTolerance"])
         lines += ["### Court-point localization", "",
-                  "References are native points. A predicted location is its detection-box center. "
+                  "References are native points. "
+                  f"{pointRepresentations[courtRepresentation(state['training']['configuration'])]} "
                   "The highest-confidence detection is used, never the closest. "
                   "Distances are fractions of the original image diagonal. Error median/p90 include only points "
                   "with a prediction; success rates include every annotated point, including misses.", "",

@@ -20,7 +20,9 @@ from futsal.evaluation.pointMetrics import scorePoints
 from futsal.inventory.catalog import hashFile, resolveSourcePath
 from futsal.reporting.report import atomicWrite
 from futsal.reporting.researchExamples import fixedExamples, selectExamples
+from futsal.training.courtPose import poseLabels, referencePoints
 from futsal.training.trainingBackend import initializeBackend
+from futsal.training.trainingConfig import courtRepresentation
 from futsal.training.trainingData import copyRuntimeData
 from futsal.training.trainingEnvironment import inspectEnvironment, packageVersions
 from futsal.training.trainingRun import fileEvidence, snapshotCode, utcNow, verifyBundleUnchanged
@@ -58,8 +60,10 @@ def archiveExamples(datasetDir, outputDir, selected, references, *, mediaStoreDi
     return result
 
 
-def evaluateStage(datasetDir, runDir, outputDir, workDir, task, references, stage, state, fixedIds, *, mediaStoreDir=None):
+def evaluateStage(datasetDir, runDir, outputDir, workDir, task, references, stage, state, fixedIds, *, mediaStoreDir=None,
+                  pointBoxes=None):
     taskId, config = task["taskId"], state["protocol"]
+    pose = courtRepresentation(state["training"]["configuration"]) == "courtPose"
     evidenceDir = outputDir / "evidence" / taskId
     evidenceDir.mkdir()
     best = stage["results"]["checkpoints"]["best"]
@@ -71,15 +75,20 @@ def evaluateStage(datasetDir, runDir, outputDir, workDir, task, references, stag
     if mediaStoreDir is not None:
         from futsal.training.sharedRuntime import prepareSharedRuntime
 
-        runtimeEvidence = prepareSharedRuntime(mediaStoreDir, workDir, selection)
+        labels = {taskId: poseLabels(task["rows"], referencePoints(references), task["classes"])} if pose else None
+        runtimeEvidence = prepareSharedRuntime(mediaStoreDir, workDir, selection, labels)
     else:
         runtimeEvidence = copyRuntimeData(datasetDir, workDir, selection)
     writeJson(evidenceDir / "runtimeEvidence.json", runtimeEvidence)
+    options = {"pointBoxes": pointBoxes} if pose else {}
     predictions, native = predictValidation(checkpoint, task, references, stage,
-                                            state["training"]["configuration"], config, workDir)
+                                            state["training"]["configuration"], config, workDir, **options)
     verifyEvidence(workDir, runtimeEvidence)
     if hashFile(checkpoint) != best["sha256"]:
         raise ValueError("Evaluation changed the input checkpoint.")
+    if pose:
+        writeJsonLines(evidenceDir / "poseKeypoints.jsonl", [{"recordId": row["recordId"],
+                       "instance": row.pop("poseInstance")} for row in predictions])
     predictions = validatePredictions(references, predictions, task["classes"], config)
     writeJsonLines(evidenceDir / "predictions.jsonl", predictions)
     detection = scoreDetections(references, predictions, task["classes"], state["pointClasses"], config)
@@ -95,7 +104,8 @@ def evaluateStage(datasetDir, runDir, outputDir, workDir, task, references, stag
     return {"taskId": taskId, "status": "completed", "classes": task["classes"], "checkpoint": best,
             "imageCount": len(references), "recordIds": [row["recordId"] for row in references],
             "evidenceDirectory": evidenceDir.relative_to(outputDir).as_posix(), "examples": examples,
-            "nativeValidationMetrics": native, "apMatchingSpace": "nativeLetterboxedInput",
+            "nativeValidationMetrics": native,
+            "apMatchingSpace": "originalImagePixels" if pose else "nativeLetterboxedInput",
             "predictionSpace": "originalImagePixels", "runtimeHashesVerified": True}
 
 
@@ -192,7 +202,8 @@ def evaluateRun(runDir, datasetDir, configPath, selection, outputDir, progress=p
             progress(f"Evaluating {taskId}: {len(tasks[taskId]['rows'])} {selection} images...")
             references = buildReferences(plan, tasks[taskId])
             current.update(evaluateStage(datasetDir, runDir, outputDir, workDir, tasks[taskId], references,
-                                         stage, state, fixedIds, mediaStoreDir=mediaStoreDir))
+                                         stage, state, fixedIds, mediaStoreDir=mediaStoreDir,
+                                         pointBoxes=plan["recipe"]["pointBoxes"]))
             saveEvaluation(outputDir, state)
         state["status"] = "completed" if all(s["status"] == "completed" for s in state["stages"]) else "partial"
     except (Exception, KeyboardInterrupt) as error:
