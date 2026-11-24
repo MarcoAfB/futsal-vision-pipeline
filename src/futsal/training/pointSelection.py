@@ -23,10 +23,15 @@ def pointSelectionScore(references, predictions, names, selection):
             "frames": len(references)}
 
 
-def pointSelectionValidator(dataloader, saveDir, args, callbacks, references, names, selection, recordOf):
+def pointSelectionValidator(dataloader, saveDir, args, callbacks, references, names, selection, recordOf,
+                            pointBoxes=None):
+    """pointBoxes selects the courtPose path, which converts keypoints to native landmark detections."""
     from ultralytics.models.yolo.detect import DetectionValidator
+    from ultralytics.models.yolo.pose import PoseValidator
 
-    class PointSelectionValidator(DetectionValidator):
+    from futsal.evaluation.posePredictions import landmarkDetections, poseInstances
+
+    class PointSelectionValidator(DetectionValidator if pointBoxes is None else PoseValidator):
         def init_metrics(self, model):
             super().init_metrics(model)
             self.pointPredictions = []
@@ -36,9 +41,14 @@ def pointSelectionValidator(dataloader, saveDir, args, callbacks, references, na
             for index, pred in enumerate(preds):
                 pbatch = self._prepare_batch(index, batch)
                 scaled = self.scale_preds(self._prepare_pred(pred), pbatch)
-                detections = [{"classId": int(classId), "confidence": float(confidence), "box": box}
-                              for classId, confidence, box in zip(scaled["cls"].tolist(), scaled["conf"].tolist(),
-                                                                  scaled["bboxes"].tolist(), strict=True)]
+                if pointBoxes is None:
+                    detections = [{"classId": int(classId), "confidence": float(confidence), "box": box}
+                                  for classId, confidence, box in zip(scaled["cls"].tolist(), scaled["conf"].tolist(),
+                                                                      scaled["bboxes"].tolist(), strict=True)]
+                else:
+                    height, width = pbatch["ori_shape"]
+                    detections = landmarkDetections(poseInstances(scaled), [width, height], names, pointBoxes,
+                                                    self.args.conf)
                 self.pointPredictions.append({"recordId": recordOf(pbatch["im_file"]), "detections": detections})
 
         def pointScores(self):
